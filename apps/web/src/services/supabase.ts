@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { JobApplication, ApplicationEvent, ApplicationEventWithJobInfo, Email } from "@/types/application";
+import { JobApplication, ApplicationEvent, Email } from "@/types/application";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
@@ -88,6 +88,25 @@ export const jobApplicationsService = {
 };
 
 export const applicationEventsService = {
+  TEMP_USER_ID: "dev-user-123",
+
+  async getAllEvents(): Promise<ApplicationEvent[]> {
+    const { data, error } = await supabase
+      .from("application_events")
+      .select(
+        `
+        *,
+        job_applications!inner(user_id)
+      `
+      )
+      .eq("job_applications.user_id", this.TEMP_USER_ID)
+      .order("event_date", { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+    return data || [];
+  },
+
   async getEventsByApplicationId(
     applicationId: string
   ): Promise<ApplicationEvent[]> {

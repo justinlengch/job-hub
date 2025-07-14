@@ -8,18 +8,19 @@ export const useApplicationEvents = (applicationId?: string) => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchEvents = async () => {
-    if (!applicationId) {
-      setEvents([]);
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
-      const data = await applicationEventsService.getEventsByApplicationId(
-        applicationId
-      );
+
+      let data: ApplicationEvent[];
+      if (applicationId) {
+        data = await applicationEventsService.getEventsByApplicationId(
+          applicationId
+        );
+      } else {
+        data = await applicationEventsService.getAllEvents();
+      }
+
       setEvents(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch events");
