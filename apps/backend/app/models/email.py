@@ -5,6 +5,7 @@ from typing import Optional
 
 class ApplicationStatus(str, Enum):
     APPLIED = "APPLIED"
+    ASSESSMENT = "ASSESSMENT"
     INTERVIEW = "INTERVIEW"
     REJECTED = "REJECTED"
     OFFERED = "OFFERED"

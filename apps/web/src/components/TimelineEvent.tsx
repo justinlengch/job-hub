@@ -1,4 +1,3 @@
-
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TimelineEvent as TimelineEventType } from "@/types/application";
@@ -8,11 +7,27 @@ interface TimelineEventProps {
   event: TimelineEventType;
 }
 
-const statusColors = {
-  applied: "bg-blue-100 text-blue-800",
-  'in-progress': "bg-yellow-100 text-yellow-800",
-  offer: "bg-green-100 text-green-800",
-  rejected: "bg-red-100 text-red-800"
+const eventTypeColors = {
+  APPLICATION_SUBMITTED: "bg-blue-100 text-blue-800",
+  APPLICATION_VIEWED: "bg-blue-100 text-blue-800",
+  APPLICATION_REVIEWED: "bg-purple-100 text-purple-800",
+  ASSESSMENT_RECEIVED: "bg-purple-100 text-purple-800",
+  ASSESSMENT_COMPLETED: "bg-purple-100 text-purple-800",
+  INTERVIEW_SCHEDULED: "bg-yellow-100 text-yellow-800",
+  INTERVIEW_COMPLETED: "bg-yellow-100 text-yellow-800",
+  REFERENCE_REQUESTED: "bg-orange-100 text-orange-800",
+  OFFER_RECEIVED: "bg-green-100 text-green-800",
+  OFFER_ACCEPTED: "bg-green-100 text-green-800",
+  OFFER_DECLINED: "bg-red-100 text-red-800",
+  APPLICATION_REJECTED: "bg-red-100 text-red-800",
+  APPLICATION_WITHDRAWN: "bg-gray-100 text-gray-800",
+};
+
+const formatEventType = (eventType: string) => {
+  return eventType
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 };
 
 const TimelineEventComponent = ({ event }: TimelineEventProps) => {
@@ -22,17 +37,25 @@ const TimelineEventComponent = ({ event }: TimelineEventProps) => {
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             <Building2 className="h-4 w-4 text-muted-foreground" />
-            <span className="font-semibold text-sm">{event.company}</span>
-            <Badge className={`text-xs ${statusColors[event.status]}`}>
-              {event.status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+            <span className="font-semibold text-sm">
+              {event.company || "Unknown Company"}
+            </span>
+            <Badge
+              className={`text-xs ${
+                eventTypeColors[event.event_type] || "bg-gray-100 text-gray-800"
+              }`}
+            >
+              {formatEventType(event.event_type)}
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground mb-1">{event.position}</p>
+          <p className="text-sm text-muted-foreground mb-1">
+            {event.role || "Unknown Role"}
+          </p>
           <p className="text-sm">{event.description}</p>
         </div>
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <Calendar className="h-3 w-3" />
-          <span>{new Date(event.date).toLocaleDateString()}</span>
+          <span>{new Date(event.event_date).toLocaleDateString()}</span>
         </div>
       </div>
     </Card>
