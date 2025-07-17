@@ -6,6 +6,18 @@ from ..services.llm import extract_job_info
 from ..services.supabase import get_supabase_client
 from ..core.auth import get_current_user
 
+# TODO: Task 4 - Email Processing Logic
+# - Update /parse-email endpoint to handle the complete flow
+# - Implement decision tree based on intent and confidence score
+# - Add logic for creating new applications vs updating existing ones
+# - Integrate application event creation when appropriate
+
+# TODO: Task 5 - Database Operations
+# - Add proper database queries for application matching
+# - Implement application creation with all required fields
+# - Add application event insertion logic
+# - Update email table to mark as parsed with confidence score
+
 router = APIRouter(tags=["email"])
 
 @router.post("/test-parse-email")

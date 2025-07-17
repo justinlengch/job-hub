@@ -55,6 +55,11 @@ class EmailParseResponse(BaseModel):
     """
     Response schema for the /parse-email endpoint
     """
+    # TODO: Task 6 - Response Models
+    # - Update EmailParseResponse to include action_taken field
+    # - Add fields for application_id, confidence_score, and reason
+    # - Ensure response model matches the decision outcomes
+    
     application_id: Optional[str] = Field(
         None, description="Matched JobApplication ID, if any"
     )

@@ -9,6 +9,12 @@ from ..models.api.job_application import ApplicationStatus
 # Configure Gemini API
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
+# TODO: Task 2 - Enhanced LLM Service
+# - Update extract_job_info function to classify email intent
+# - Add structured prompt for LLM to determine if email is new application vs event
+# - Implement confidence scoring and intent-based data extraction
+# - Add proper error handling for LLM response parsing
+
 
 async def extract_job_info(email_input: LLMEmailInput) -> LLMEmailOutput:
     """

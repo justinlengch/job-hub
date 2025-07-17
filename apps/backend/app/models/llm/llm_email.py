@@ -3,6 +3,11 @@ from typing import Optional
 
 from ..api.job_application import ApplicationStatus
 
+# TODO: Task 1 - Update LLM Models
+# - Add EmailIntent enum with NEW_APPLICATION, APPLICATION_EVENT, GENERAL values
+# - Update LLMEmailOutput to include intent classification and event-related fields
+# - Ensure models align with the existing ApplicationEventType enum
+
 class LLMEmailInput(BaseModel):
     """
     Schema for data sent _into_ the LLM for parsing emails
