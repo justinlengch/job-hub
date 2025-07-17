@@ -7,7 +7,8 @@ class Settings(BaseSettings):
 
     SUPABASE_URL: str = Field(default="", description="Supabase project URL")
     SUPABASE_SERVICE_ROLE_KEY: str = Field(default="", description="Supabase service role key")
+    SUPABASE_ANON_KEY: str = Field(default="", description="Supabase anon key")
     GEMINI_API_KEY: str = Field(default="", description="Google Gemini API key")
 
 
-settings = Settings() 
+settings = Settings()

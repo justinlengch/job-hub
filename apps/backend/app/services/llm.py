@@ -2,7 +2,7 @@ import google.generativeai as genai
 from typing import Optional
 import json
 import logging
-from ..config import settings
+from ..core.config import settings
 from ..models.llm.llm_email import LLMEmailInput, LLMEmailOutput
 from ..models.api.job_application import ApplicationStatus
 
