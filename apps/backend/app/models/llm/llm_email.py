@@ -1,9 +1,9 @@
 from pydantic import BaseModel, Field, HttpUrl
 from typing import Optional
 
-from models.api.job_application import ApplicationStatus
+from ..api.job_application import ApplicationStatus
 
-class EmailLLMInput(BaseModel):
+class LLMEmailInput(BaseModel):
     """
     Schema for data sent _into_ the LLM for parsing emails
     """
@@ -12,7 +12,7 @@ class EmailLLMInput(BaseModel):
     body_html: Optional[str] = Field(None, description="HTML body of the email")
 
 
-class EmailLLMOutput(BaseModel):
+class LLMEmailOutput(BaseModel):
     """
     Schema for data returned _from_ the LLM after parsing
     """

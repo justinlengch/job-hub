@@ -99,7 +99,6 @@ export interface EmailParseRequest {
   body_html?: string;
   received_date: string;
   sender: string;
-  user_id: string;
 }
 
 export interface EmailParseResponse {

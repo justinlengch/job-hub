@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from datetime import datetime
 from typing import Optional
 
-from models.api.job_application import ApplicationStatus
+from .job_application import ApplicationStatus
 
 
 class EmailCreate(BaseModel):
@@ -49,7 +49,6 @@ class EmailParseRequest(BaseModel):
     body_html: Optional[str] = Field(None, description="HTML body, if provided")
     received_date: datetime = Field(..., description="When the email was received")
     sender: str = Field(..., description="Email sender address")
-    user_id: str = Field(..., description="Supabase Auth user ID for stamping records")
 
 
 class EmailParseResponse(BaseModel):
