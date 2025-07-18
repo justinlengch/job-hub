@@ -1,13 +1,13 @@
-from supabase import create_client, Client
-from core.config import settings
+from supabase import acreate_client, AsyncClient
+from app.core.config import settings
 
-def get_supabase_client() -> Client:
-    """
-    Create and return a Supabase client instance using credentials from settings.
-    
-    Uses the service role key to enable writing to the database without RLS restrictions.
-    """
-    return create_client(
-        settings.SUPABASE_URL,
-        settings.SUPABASE_SERVICE_ROLE_KEY
-    )
+_supabase_client: AsyncClient | None = None
+
+async def get_supabase_client() -> AsyncClient:
+    global _supabase_client
+    if _supabase_client is None:
+        _supabase_client = await acreate_client(
+            settings.SUPABASE_URL,
+            settings.SUPABASE_SERVICE_ROLE_KEY
+        )
+    return _supabase_client

@@ -2,13 +2,9 @@
 """
 Test script to verify the refactored extract_job_info function with google-genai SDK
 """
-
-import asyncio
+import pytest
 import sys
 import os
-
-# Add the app directory to the path
-sys.path.insert(0, '/home/justin/repos/job-hub/apps/backend/app')
 
 async def test_google_genai_sdk():
     """Test the refactored function with google-genai SDK"""
@@ -105,5 +101,5 @@ async def main():
         return False
 
 if __name__ == "__main__":
-    success = asyncio.run(main())
+    success = main()
     sys.exit(0 if success else 1)

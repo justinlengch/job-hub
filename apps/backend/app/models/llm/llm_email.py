@@ -41,9 +41,6 @@ class LLMEmailOutput(BaseModel):
     notes: Optional[str] = Field(
         None, description="Any additional notes"
     )
-    application_id: Optional[str] = Field(
-        None, description="Matched JobApplication ID, if found"
-    )
     intent: EmailIntent = Field(
         ..., description="Intent classification of the email by llm"
     )

@@ -6,10 +6,10 @@ import logging
 import re
 import asyncio
 from datetime import datetime
-from core.config import settings
-from models.llm.llm_email import LLMEmailInput, LLMEmailOutput, EmailIntent
-from models.api.job_application import ApplicationStatus
-from models.api.application_event import ApplicationEventType
+from app.core.config import settings
+from app.models.llm.llm_email import LLMEmailInput, LLMEmailOutput, EmailIntent
+from app.models.api.job_application import ApplicationStatus
+from app.models.api.application_event import ApplicationEventType
 from .prompt_loader import format_email_analysis_prompt
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -28,7 +28,6 @@ def _get_fallback_output(
         location=None,
         salary_range=None,
         notes=notes,
-        application_id=None,
         event_type=None,
         event_description=None,
         event_date=None

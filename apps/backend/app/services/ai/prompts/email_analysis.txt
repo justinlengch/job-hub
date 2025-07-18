@@ -20,8 +20,7 @@ SCHEMA:
 "event_date": null,
 "location": null,
 "salary_range": null,
-"notes": null,
-"application_id": null
+"notes": null
 }
 
 RULES:
@@ -29,26 +28,12 @@ RULES:
 - company: Extract company name, use null if unclear
 - role: Extract job title/position, use null if unclear
 - status: Best guess of application status, default to APPLIED if unclear
-- event_type: Only set if intent is APPLICATION_EVENT
+- event_type: Only set if intent is APPLICATION_EVENT, use EVENT_TYPE enum
 - event_description: Brief description of the event if applicable
 - event_date: ISO format date if mentioned, otherwise null
 - location: Job location if mentioned, otherwise null
 - salary_range: Salary info if mentioned, otherwise null
 - notes: Any additional relevant information, otherwise null
-- application_id: Leave as null (used by system)
-
-RULES:
-- intent: Always required, classify the email purpose, use GENERAL if unclear
-- company: Extract company name, use null if unclear
-- role: Extract job title/position, use null if unclear
-- status: Best guess of application status, default to APPLIED if unclear
-- event_type: Only set if intent is APPLICATION_EVENT
-- event_description: Brief description of the event if applicable
-- event_date: ISO format date if mentioned, otherwise null
-- location: Job location if mentioned, otherwise null
-- salary_range: Salary info if mentioned, otherwise null
-- notes: Any additional relevant information, otherwise null
-- application_id: Leave as null (used by system)
 
 ===== EMAIL =====
 Subject: $subject
