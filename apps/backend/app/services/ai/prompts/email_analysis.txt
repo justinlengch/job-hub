@@ -1,0 +1,58 @@
+You are an expert at analyzing job-application emails.
+
+TASK: Return ONLY valid JSON matching the schema below.  
+If a field cannot be extracted, use null.
+
+===== ENUMS =====
+INTENT: NEW_APPLICATION | APPLICATION_EVENT | GENERAL
+STATUS: APPLIED | ASSESSMENT | INTERVIEW | REJECTED | OFFERED | ACCEPTED | WITHDRAWN
+EVENT_TYPE: APPLICATION_SUBMITTED | APPLICATION_VIEWED | APPLICATION_REVIEWED | ASSESSMENT_RECEIVED | ASSESSMENT_COMPLETED | INTERVIEW_SCHEDULED | INTERVIEW_COMPLETED | REFERENCE_REQUESTED | OFFER_RECEIVED | OFFER_ACCEPTED | OFFER_DECLINED | APPLICATION_REJECTED | APPLICATION_WITHDRAWN
+=================
+
+SCHEMA:
+{
+"intent": "<INTENT>",
+"company": "...",
+"role": "...",
+"status": "<STATUS>",
+"event_type": null,
+"event_description": null,
+"event_date": null,
+"location": null,
+"salary_range": null,
+"notes": null,
+"application_id": null
+}
+
+RULES:
+- intent: Always required, classify the email purpose, NEW_APPLICATION is for application received emails, APPLICATION_EVENT is for details indicating a change to application status/stage. Use GENERAL if unclear
+- company: Extract company name, use null if unclear
+- role: Extract job title/position, use null if unclear
+- status: Best guess of application status, default to APPLIED if unclear
+- event_type: Only set if intent is APPLICATION_EVENT
+- event_description: Brief description of the event if applicable
+- event_date: ISO format date if mentioned, otherwise null
+- location: Job location if mentioned, otherwise null
+- salary_range: Salary info if mentioned, otherwise null
+- notes: Any additional relevant information, otherwise null
+- application_id: Leave as null (used by system)
+
+RULES:
+- intent: Always required, classify the email purpose, use GENERAL if unclear
+- company: Extract company name, use null if unclear
+- role: Extract job title/position, use null if unclear
+- status: Best guess of application status, default to APPLIED if unclear
+- event_type: Only set if intent is APPLICATION_EVENT
+- event_description: Brief description of the event if applicable
+- event_date: ISO format date if mentioned, otherwise null
+- location: Job location if mentioned, otherwise null
+- salary_range: Salary info if mentioned, otherwise null
+- notes: Any additional relevant information, otherwise null
+- application_id: Leave as null (used by system)
+
+===== EMAIL =====
+Subject: $subject
+Body:
+$body_text
+$html_section
+=================

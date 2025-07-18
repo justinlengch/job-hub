@@ -1,12 +1,18 @@
+from enum import Enum
 from pydantic import BaseModel, Field, HttpUrl
 from typing import Optional
+from datetime import datetime
 
 from ..api.job_application import ApplicationStatus
+from ..api.application_event import ApplicationEventType
 
-# TODO: Task 1 - Update LLM Models
-# - Add EmailIntent enum with NEW_APPLICATION, APPLICATION_EVENT, GENERAL values
-# - Update LLMEmailOutput to include intent classification and event-related fields
-# - Ensure models align with the existing ApplicationEventType enum
+class EmailIntent(str, Enum):
+    """
+    Enum for email intent classification.
+    """
+    NEW_APPLICATION = "NEW_APPLICATION"
+    APPLICATION_EVENT = "APPLICATION_EVENT"
+    GENERAL = "GENERAL"
 
 class LLMEmailInput(BaseModel):
     """
@@ -26,9 +32,6 @@ class LLMEmailOutput(BaseModel):
     status: ApplicationStatus = Field(
         ..., description="One of the defined application statuses"
     )
-    job_posting_url: Optional[HttpUrl] = Field(
-        None, description="URL to the job posting, if available"
-    )
     location: Optional[str] = Field(
         None, description="Job location, if available"
     )
@@ -38,10 +41,18 @@ class LLMEmailOutput(BaseModel):
     notes: Optional[str] = Field(
         None, description="Any additional notes"
     )
-    confidence_score: float = Field(
-        ..., ge=0.0, le=1.0,
-        description="LLM's confidence score (0.0–1.0)"
-    )
     application_id: Optional[str] = Field(
         None, description="Matched JobApplication ID, if found"
+    )
+    intent: EmailIntent = Field(
+        ..., description="Intent classification of the email by llm"
+    )
+    event_type: Optional[ApplicationEventType] = Field(
+        None, description="Type of application event if intent is APPLICATION_EVENT"
+    )
+    event_description: Optional[str] = Field(
+        None, description="Description of the event if applicable"
+    )
+    event_date: Optional[datetime] = Field(
+        None, description="Date when the event occurred"
     )

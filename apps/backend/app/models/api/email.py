@@ -68,15 +68,7 @@ class EmailParseResponse(BaseModel):
     status: ApplicationStatus = Field(
         ..., description="One of the defined application statuses"
     )
-    job_posting_url: Optional[HttpUrl] = Field(
-        None, description="URL to the job posting, if found"
-    )
     location: Optional[str] = Field(None, description="Extracted job location")
     salary_range: Optional[str] = Field(None, description="Extracted salary range info")
     notes: Optional[str] = Field(None, description="Additional extracted notes")
-    confidence_score: float = Field(
-        ...,
-        ge=0.0,
-        le=1.0,
-        description="LLM parsing confidence (0.0–1.0)",
-    )
+

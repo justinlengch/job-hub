@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any
 from ..models.llm.llm_email import LLMEmailInput, LLMEmailOutput
 from ..models.api.email import EmailParseRequest, EmailParseResponse
-from ..services.llm import extract_job_info
+from ..services.ai.llm import extract_job_info
+from ..services.db_operations import insert_job_application_with_retry, update_email_as_parsed
 from ..services.supabase import get_supabase_client
 from ..core.auth import get_current_user
 
@@ -44,11 +45,9 @@ async def test_parse_email_no_auth(request: EmailParseRequest):
                 "company": job_info.company,
                 "role": job_info.role,
                 "status": job_info.status.value if hasattr(job_info.status, 'value') else str(job_info.status),
-                "job_posting_url": str(job_info.job_posting_url) if job_info.job_posting_url else None,
                 "location": job_info.location,
                 "salary_range": job_info.salary_range,
-                "notes": job_info.notes,
-                "confidence_score": job_info.confidence_score
+                "notes": job_info.notes
             }
         }
     except Exception as e:
@@ -62,7 +61,7 @@ async def test_parse_email_no_auth(request: EmailParseRequest):
 async def parse_email(request: EmailParseRequest, current_user_id: str = Depends(get_current_user)):
     """
     Parse an email to extract job application information using LLM.
-    Then store the extracted data in Supabase.
+    Then store the extracted data in Supabase with retry logic.
     User authentication is required via Bearer token.
     """
     try:
@@ -76,33 +75,31 @@ async def parse_email(request: EmailParseRequest, current_user_id: str = Depends
         # Extract job info using LLM
         job_info = await extract_job_info(email_input)
         
-        supabase = get_supabase_client()
+        # Insert into database with retry logic
+        created_app = await insert_job_application_with_retry(
+            user_id=current_user_id,
+            job_info=job_info,
+            email_id=request.email_id,
+            email_subject=request.subject,
+            email_received_at=request.received_date
+        )
         
-        response = supabase.table("job_applications").insert({
-            "user_id": current_user_id,
-            "company": job_info.company,
-            "role": job_info.role,
-            "status": job_info.status.value,
-            "job_posting_url": str(job_info.job_posting_url) if job_info.job_posting_url else None,
-            "location": job_info.location,
-            "salary_range": job_info.salary_range,
-            "notes": job_info.notes,
-            "email_id": request.email_id,
-            "email_subject": request.subject,
-            "email_received_at": request.received_date.isoformat()
-        }).execute()
+        # Update email as parsed if email_id is provided
+        if request.email_id:
+            await update_email_as_parsed(
+                email_id=request.email_id,
+                application_id=created_app.get("id")
+            )
         
         # Convert LLMEmailOutput to EmailParseResponse
         return EmailParseResponse(
-            application_id=job_info.application_id,
+            application_id=created_app.get("id"),
             company=job_info.company,
             role=job_info.role,
             status=job_info.status,
-            job_posting_url=job_info.job_posting_url,
             location=job_info.location,
             salary_range=job_info.salary_range,
-            notes=job_info.notes,
-            confidence_score=job_info.confidence_score
+            notes=job_info.notes
         )
     
     except Exception as e:

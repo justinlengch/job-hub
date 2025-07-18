@@ -5,7 +5,7 @@
 # - Handle edge cases where no matches are found
 
 from typing import Optional
-from ..services.supabase import get_supabase_client
+from services.supabase import get_supabase_client
 
 async def find_matching_application(user_id: str, company: str, role: str) -> Optional[str]:
     """
