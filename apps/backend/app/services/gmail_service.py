@@ -43,7 +43,8 @@ class GmailService(BaseService):
                 scopes=[
                     "https://www.googleapis.com/auth/gmail.readonly",
                     "https://www.googleapis.com/auth/gmail.modify",
-                    "https://www.googleapis.com/auth/gmail.labels"
+                    "https://www.googleapis.com/auth/gmail.labels",
+                    "https://www.googleapis.com/auth/gmail.settings.basic"
                 ]
             )
             
@@ -74,7 +75,8 @@ class GmailService(BaseService):
                 scopes=[
                     "https://www.googleapis.com/auth/gmail.readonly",
                     "https://www.googleapis.com/auth/gmail.modify",
-                    "https://www.googleapis.com/auth/gmail.labels"
+                    "https://www.googleapis.com/auth/gmail.labels",
+                    "https://www.googleapis.com/auth/gmail.settings.basic"
                 ]
             )
             
@@ -116,7 +118,7 @@ class GmailService(BaseService):
                 "labelListVisibility": "labelShow",
                 "messageListVisibility": "show",
                 "color": {
-                    "backgroundColor": "#16a085", 
+                    "backgroundColor": "#149e60", 
                     "textColor": "#ffffff"
                 }
             }
