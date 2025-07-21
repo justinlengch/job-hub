@@ -34,7 +34,12 @@ async def health_check():
     return {"status": "ok", "message": "Job Hub API is running"}
 
 from app.routes.parse import router as parse_router
+from app.routes.gmail import router as gmail_router
+from app.routes.auth import router as auth_router
+
 app.include_router(parse_router, prefix="/api")
+app.include_router(gmail_router)
+app.include_router(auth_router)
 
 if __name__ == "__main__":
     import uvicorn

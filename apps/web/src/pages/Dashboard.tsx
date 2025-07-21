@@ -7,6 +7,7 @@ import TimelineEventComponent from "@/components/TimelineEvent";
 import FilterControls from "@/components/FilterControls";
 import StatsChart from "@/components/StatsChart";
 import Navigation from "@/components/Navigation";
+import { GmailSetupButton } from "@/components/GmailSetupButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   FileText,
@@ -142,6 +143,11 @@ const Dashboard = () => {
         {/* Charts */}
         <div className="mb-8">
           <StatsChart statusCounts={statusCounts} />
+        </div>
+
+        {/* Gmail Integration Section */}
+        <div className="mb-8">
+          <GmailSetupButton />
         </div>
 
         {/* Filter Controls */}

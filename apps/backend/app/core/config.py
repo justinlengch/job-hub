@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = Field(default="", description="Supabase service role key")
     SUPABASE_ANON_KEY: str = Field(default="", description="Supabase anon key")
     GEMINI_API_KEY: str = Field(default="", description="Google Gemini API key")
+    
+    GOOGLE_CLIENT_ID: str = Field(default="", description="Google OAuth client ID")
+    GOOGLE_CLIENT_SECRET: str = Field(default="", description="Google OAuth client secret")
+    GOOGLE_PROJECT_ID: str = Field(default="", description="Google Cloud project ID")
 
 
 settings = Settings()

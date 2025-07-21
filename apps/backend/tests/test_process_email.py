@@ -6,7 +6,7 @@ from datetime import datetime
 from app.models.llm.llm_email import LLMEmailOutput, EmailIntent
 from app.models.api.job_application import ApplicationStatus
 from app.models.api.application_event import ApplicationEventType
-from app.services.db_operations import process_email
+from app.services.supabase_service import supabase_service
 
 @pytest.mark.asyncio
 async def test_new_application():
@@ -26,7 +26,7 @@ async def test_new_application():
         intent=EmailIntent.NEW_APPLICATION
     )
     
-    result = await process_email(
+    result = await supabase_service.process_email(
         parsed=parsed_data,
         raw_email_id="test_email_new_app_123",
         user_id="test_user_123",
@@ -59,7 +59,7 @@ async def test_application_event():
         notes= "Interview scheduled from email"
     )
     
-    result = await process_email(
+    result = await supabase_service.process_email(
         parsed=parsed_data,
         raw_email_id="test_email_event_456",
         user_id="test_user_123",
@@ -69,7 +69,6 @@ async def test_application_event():
         received_at=datetime.now()
     )
     
-    # verify that an application event was processed
     assert result["status"] == "processed"
     assert result.get("intent") == "APPLICATION_EVENT"
     assert "event" in result
@@ -93,7 +92,7 @@ async def test_duplicate_email():
     )
     
     # First, try to process the same email ID again
-    result = await process_email(
+    result = await supabase_service.process_email(
         parsed=parsed_data,
         raw_email_id="test_email_new_app_123",  # Same as first test
         user_id="test_user_123",
@@ -125,7 +124,7 @@ async def test_general_email():
         event_date=None
     )
     
-    result = await process_email(
+    result = await supabase_service.process_email(
         parsed=parsed_data,
         raw_email_id="test_email_general_789",
         user_id="test_user_123",

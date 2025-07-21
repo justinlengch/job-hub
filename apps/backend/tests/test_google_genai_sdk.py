@@ -11,7 +11,7 @@ async def test_google_genai_sdk():
     
     try:
         from app.models.llm.llm_email import LLMEmailInput
-        from app.services.ai.llm import extract_job_info
+        from apps.backend.app.services.ai.llm_service import extract_job_info
         
         # Create test input
         test_input = LLMEmailInput(

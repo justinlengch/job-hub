@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { BarChart3, Table, FileText, LogOut } from "lucide-react";
+import { BarChart3, Table, FileText, LogOut, Settings } from "lucide-react";
 
 const Navigation = () => {
   const location = useLocation();
@@ -46,6 +46,17 @@ const Navigation = () => {
               <Link to="/dashboard/spreadsheet">
                 <Table className="h-4 w-4" />
                 Spreadsheet
+              </Link>
+            </Button>
+
+            <Button
+              variant={isActive("/settings") ? "default" : "ghost"}
+              asChild
+              className="flex items-center gap-2"
+            >
+              <Link to="/settings">
+                <Settings className="h-4 w-4" />
+                Settings
               </Link>
             </Button>
 

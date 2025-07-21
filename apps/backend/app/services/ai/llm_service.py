@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.models.llm.llm_email import LLMEmailInput, LLMEmailOutput, EmailIntent
 from app.models.api.job_application import ApplicationStatus
 from app.models.api.application_event import ApplicationEventType
-from .prompt_loader import format_email_analysis_prompt
+from .prompt_loader_service import format_email_analysis_prompt
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
@@ -74,7 +74,6 @@ async def _call_gemini_with_retry(
         response_mime_type="application/json"
     )
     
-    # Build contents - combine system and user prompts since system role isn't supported
     combined_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
     
     contents = [types.Content(
@@ -90,7 +89,6 @@ async def _call_gemini_with_retry(
                 config=config
             )
             
-            # Extract text from response
             if response.candidates and len(response.candidates) > 0:
                 content = response.candidates[0].content
                 if content and content.parts and len(content.parts) > 0:

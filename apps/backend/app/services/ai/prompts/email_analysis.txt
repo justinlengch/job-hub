@@ -24,7 +24,7 @@ SCHEMA:
 }
 
 RULES:
-- intent: Always required, classify the email purpose, NEW_APPLICATION is for application received emails, APPLICATION_EVENT is for details indicating a change to application status/stage. Use GENERAL if unclear
+- intent: Always required, classify the email purpose, NEW_APPLICATION is for application received/submitted emails, APPLICATION_EVENT is for details indicating a change to job application status that fits into categories defined in EVENT_TYPE enum. Use GENERAL if unclear or email is not job application related.
 - company: Extract company name, use null if unclear
 - role: Extract job title/position, use null if unclear
 - status: Best guess of application status, default to APPLIED if unclear

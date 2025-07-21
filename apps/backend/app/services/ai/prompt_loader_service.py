@@ -24,12 +24,10 @@ def format_email_analysis_prompt(
     """
     template_str = load_prompt("email_analysis")
     
-    # Split the template at the EMAIL section
     if "===== EMAIL =====" in template_str:
         system_part, email_part = template_str.split("===== EMAIL =====", 1)
         system_prompt = system_part.strip()
         
-        # Format the user prompt with actual email content
         template = Template(email_part)
         html_section = ""
         if body_html:

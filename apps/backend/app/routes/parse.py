@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any
-from ..models.llm.llm_email import LLMEmailInput, LLMEmailOutput
-from ..models.api.email import EmailParseRequest, EmailParseResponse
-from ..services.ai.llm import extract_job_info
-from ..services.db_operations import process_email
-from ..services.supabase import get_supabase_client
-from ..core.auth import get_current_user
+from app.services.email_parsing_service import email_parsing_service
+from app.models.llm.llm_email import LLMEmailInput, LLMEmailOutput
+from app.models.api.email import EmailParseRequest, EmailParseResponse
+from app.services.ai.llm_service import extract_job_info
+from app.core.auth import get_current_user
 
 router = APIRouter(tags=["email"])
 
@@ -64,7 +63,7 @@ async def parse_email(request: EmailParseRequest, current_user_id: str = Depends
         job_info = await extract_job_info(email_input)
         
         # Process email through the complete workflow
-        processing_result = await process_email(
+        processing_result = await email_parsing_service.process_email(
             parsed=job_info,
             raw_email_id=request.email_id,
             user_id=current_user_id,
