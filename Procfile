@@ -1,1 +1,1 @@
-web: uvicorn main:app --host=0.0.0.0 --port=$PORT
+web: uvicorn apps.backend.app.main:app  --port=$PORT --app-dir apps/backend
