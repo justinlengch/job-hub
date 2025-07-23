@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from app.services.application_matcher_service import application_matcher_service
+from app.services.supabase.application_matcher_service import application_matcher_service
 from app.models.llm.llm_email import LLMEmailOutput
 from app.services.base_service import BaseService, ServiceOperationError
-from app.services.supabase_service import supabase_service
+from app.services.supabase.supabase_client import supabase_service
 
 
 class JobApplicationService(BaseService):

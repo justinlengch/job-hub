@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any
-from .base_service import BaseService, ServiceOperationError
-from .supabase_service import supabase_service
+from ..base_service import BaseService, ServiceOperationError
+from .supabase_client import supabase_service
 
 
 class ApplicationMatcherService(BaseService):

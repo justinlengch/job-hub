@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any
-from app.services.email_parsing_service import email_parsing_service
+from app.services.supabase.email_parsing_service import email_parsing_service
 from app.models.llm.llm_email import LLMEmailInput, LLMEmailOutput
 from app.models.api.email import EmailParseRequest, EmailParseResponse
 from app.services.ai.llm_service import extract_job_info

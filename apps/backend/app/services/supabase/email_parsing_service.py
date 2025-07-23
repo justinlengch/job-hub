@@ -1,8 +1,8 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 from app.models.llm.llm_email import EmailIntent, LLMEmailOutput
-from app.services.job_application_service import job_application_service
-from app.services.supabase_service import supabase_service
+from app.services.supabase.job_application_service import job_application_service
+from app.services.supabase.supabase_client import supabase_service
 from app.services.base_service import BaseService, ServiceOperationError
 
 

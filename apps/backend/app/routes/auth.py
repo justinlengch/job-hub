@@ -3,8 +3,8 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import logging
 
-from ..services.gmail_service import gmail_service
-from ..services.supabase_service import supabase_service
+from ..services.google.gmail_service import gmail_service
+from ..services.supabase.supabase_client import supabase_service
 from ..services.base_service import ServiceOperationError
 from ..core.auth import get_current_user
 

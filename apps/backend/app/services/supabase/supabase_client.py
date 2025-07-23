@@ -1,8 +1,8 @@
 from supabase import acreate_client, AsyncClient
 from typing import Optional
 
-from .base_service import BaseService, ServiceInitializationError
-from ..core.config import settings
+from ..base_service import BaseService, ServiceInitializationError
+from ...core.config import settings
 
 
 class SupabaseService(BaseService):

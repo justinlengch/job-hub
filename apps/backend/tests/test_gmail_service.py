@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from apps.backend.app.services.gmail_service import GmailService
+from apps.backend.app.services.google.gmail_service import GmailService
 
 
 class TestGmailService:

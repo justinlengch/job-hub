@@ -6,8 +6,8 @@ from googleapiclient.errors import HttpError
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
 
-from .base_service import BaseService, ServiceInitializationError, ServiceOperationError
-from ..core.config import settings
+from ..base_service import BaseService, ServiceInitializationError, ServiceOperationError
+from ...core.config import settings
 
 
 class GmailService(BaseService):

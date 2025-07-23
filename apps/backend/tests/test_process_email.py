@@ -6,7 +6,7 @@ from datetime import datetime
 from app.models.llm.llm_email import LLMEmailOutput, EmailIntent
 from app.models.api.job_application import ApplicationStatus
 from app.models.api.application_event import ApplicationEventType
-from app.services.supabase_service import supabase_service
+from apps.backend.app.services.supabase.supabase_client import supabase_service
 
 @pytest.mark.asyncio
 async def test_new_application():
