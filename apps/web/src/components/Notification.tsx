@@ -10,7 +10,12 @@ interface NotificationProps {
   onDismiss: () => void;
 }
 
-export const Notification = ({ message, type, duration = 5000, onDismiss }: NotificationProps) => {
+export const Notification = ({
+  message,
+  type,
+  duration = 5000,
+  onDismiss,
+}: NotificationProps) => {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
@@ -26,14 +31,18 @@ export const Notification = ({ message, type, duration = 5000, onDismiss }: Noti
 
   return (
     <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2">
-      <Card className={`w-96 border-l-4 ${
-        type === "success" ? "border-l-green-500" : "border-l-red-500"
-      }`}>
+      <Card
+        className={`w-96 border-l-4 ${
+          type === "success" ? "border-l-green-500" : "border-l-red-500"
+        }`}
+      >
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <div className={`flex-shrink-0 ${
-              type === "success" ? "text-green-600" : "text-red-600"
-            }`}>
+            <div
+              className={`flex-shrink-0 ${
+                type === "success" ? "text-green-600" : "text-red-600"
+              }`}
+            >
               <CheckCircle className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">

@@ -1,6 +1,12 @@
 import { GmailSetupButton } from "@/components/GmailSetupButton";
 import Navigation from "@/components/Navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Settings as SettingsIcon, User, Bell, Shield } from "lucide-react";
 
@@ -39,9 +45,12 @@ const Settings = () => {
           {/* Gmail Integration */}
           <div className="space-y-4">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-1">Integrations</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-1">
+                Integrations
+              </h2>
               <p className="text-sm text-gray-600">
-                Connect external services to enhance your job tracking experience
+                Connect external services to enhance your job tracking
+                experience
               </p>
             </div>
             <GmailSetupButton />

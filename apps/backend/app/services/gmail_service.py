@@ -42,7 +42,6 @@ class GmailService(BaseService):
                 client_secret=settings.GOOGLE_CLIENT_SECRET,
                 scopes=[
                     "https://www.googleapis.com/auth/gmail.readonly",
-                    "https://www.googleapis.com/auth/gmail.modify",
                     "https://www.googleapis.com/auth/gmail.labels",
                     "https://www.googleapis.com/auth/gmail.settings.basic"
                 ]
@@ -74,7 +73,6 @@ class GmailService(BaseService):
                 service_account_file,
                 scopes=[
                     "https://www.googleapis.com/auth/gmail.readonly",
-                    "https://www.googleapis.com/auth/gmail.modify",
                     "https://www.googleapis.com/auth/gmail.labels",
                     "https://www.googleapis.com/auth/gmail.settings.basic"
                 ]
@@ -152,27 +150,28 @@ class GmailService(BaseService):
             raise ServiceOperationError("Gmail service not initialized")
         
         try:
+            # Check if a similar filter already exists
+            existing_filters = self.list_existing_filters()
+            for existing_filter in existing_filters:
+                action = existing_filter.get("action", {})
+                if label_id in action.get("addLabelIds", []):
+                    self._log_operation("filter already exists", f"Found existing filter for label ID: {label_id}")
+                    return True
+            
             filter_criteria = {
                 "query": (
-                    "(subject:(resume OR CV OR application OR interview OR position OR "
-                    "opportunity OR hiring OR recruitment OR job OR career OR "
-                    "candidate OR applicant OR offer OR screening OR assessment OR "
+                    # Match any of these keywords in subject OR body
+                    "resume OR CV OR application OR interview OR position OR opportunity OR hiring OR "
+                    "recruitment OR job OR career OR candidate OR applicant OR offer OR screening OR assessment OR "
                     "\"application received\" OR \"we received your application\" OR \"confirmation of your application\" OR "
                     "\"thank you for applying\" OR \"thank you for your application\" OR \"thank you for your interest\" OR "
-                    "\"your application to\" OR \"application submitted for\" OR "
-                    "\"interview invitation\" OR \"schedule interview\" OR \"invitation to interview\" OR "
-                    "\"next steps\" OR \"move forward\" OR \"follow-up\" OR "
-                    "\"job offer\" OR \"offer letter\" OR \"pleased to inform\" OR \"status update\" OR \"application status\" OR "
-                    "\"talent partner\" OR \"technical recruiter\" OR \"sourcing recruiter\" OR \"founding engineer\" OR "
-                    "\"quick call\" OR SWE OR SDE OR \"be a good fit\" OR "
-                    "\"job application\" OR \"Job opportunity\" OR \"Career opportunity\") OR "
-                    "from:(@linkedin.com OR @indeed.com OR @glassdoor.com OR "
-                    "@workday.com OR @greenhouse.io OR @lever.co OR @bamboohr.com OR "
-                    "@jobvite.com OR @smartrecruiters.com OR @talentsoft.com OR "
-                    "@successfactors.com OR @cornerstone.com OR noreply OR recruiting OR "
-                    "talent OR hr OR careers) OR "
-                    "has:attachment filename:(pdf OR doc OR docx)) AND "
-                    "NOT (subject:(spam OR advertisement OR promotion OR sale))"
+                    "\"your application to\" OR \"application submitted for\" OR \"interview invitation\" OR "
+                    "\"schedule interview\" OR \"invitation to interview\" OR \"next steps\" OR \"move forward\" OR "
+                    "\"follow-up\" OR \"job offer\" OR \"offer letter\" OR \"pleased to inform\" OR \"status update\" OR "
+                    "\"application status\" OR \"talent partner\" OR \"technical recruiter\" OR \"sourcing recruiter\" OR "
+                    "\"founding engineer\" OR \"quick call\" OR SWE OR SDE OR \"software engineer\" OR developer OR \"software developer\" OR "
+                    "\"be a good fit\" OR \"job application\" OR "
+                    "\"Job opportunity\" OR \"Career opportunity\""
                 )
             }
             
@@ -187,13 +186,21 @@ class GmailService(BaseService):
                 "action": filter_action
             }
             
-            result = self.service.users().settings().filters().create(
-                userId="me",
-                body=filter_body
-            ).execute()
-            
-            self._log_operation("created job application filter", f"ID: {result['id']}")
-            return True
+            try:
+                result = self.service.users().settings().filters().create(
+                    userId="me",
+                    body=filter_body
+                ).execute()
+                
+                self._log_operation("created job application filter", f"ID: {result['id']}")
+                return True
+                
+            except HttpError as filter_error:
+                if "already exists" in str(filter_error).lower() or filter_error.resp.status == 409:
+                    self._log_operation("filter already exists", "Using existing filter configuration")
+                    return True
+                else:
+                    raise filter_error
             
         except HttpError as e:
             self._log_error("creating filter", e)
@@ -216,15 +223,20 @@ class GmailService(BaseService):
         if not self.service:
             raise ServiceOperationError("Gmail service not initialized")
         
-        label_id = self.get_or_create_label(label_name)
-        if not label_id:
-            raise ServiceOperationError("Failed to get or create label")
-        
-        if not self.create_job_application_filter(label_id):
-            raise ServiceOperationError("Failed to create filter")
-        
-        self._log_operation("successfully set up job application labeling", f"label ID: {label_id}")
-        return label_id
+        try:
+            label_id = self.get_or_create_label(label_name)
+            if not label_id:
+                raise ServiceOperationError("Failed to get or create label")
+            
+            if not self.create_job_application_filter(label_id):
+                raise ServiceOperationError("Failed to create filter")
+            
+            self._log_operation("successfully set up job application labeling", f"label ID: {label_id}")
+            return label_id
+            
+        except Exception as e:
+            self._log_error("setting up job application labeling", e)
+            raise ServiceOperationError(f"Failed to set up labeling: {str(e)}")
     
     def list_existing_filters(self) -> list:
         """
