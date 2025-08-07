@@ -1,1 +1,0 @@
-web: uvicorn apps.backend.app.main:app  --port=$PORT --app-dir apps/backend
