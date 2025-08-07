@@ -7,8 +7,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Copy dependency files first (separate from app code)
 # This layer will only rebuild when dependencies change
-COPY apps/backend/requirements.txt ./
-COPY apps/backend/requirements.lock ./
+COPY requirements.txt ./
+COPY requirements.lock ./
 
 # Install dependencies with cache mount (this layer gets cached until requirements change)
 RUN --mount=type=cache,target=/root/.cache/uv \
