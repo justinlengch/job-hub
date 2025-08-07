@@ -22,14 +22,20 @@ wheels/
 MANIFEST
 
 # Virtual environments
-.venv
-venv
-.env
+.venv/
+venv/
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Environment files
+.env
+.env.example
+.env.local
+.env.development
+.env.test
 
 # IDE and editor files
 .vscode/
@@ -62,10 +68,6 @@ apps/web/
 
 # Development files
 apps/backend/tests/
-.env.example
-.env.local
-.env.development
-.env.test
 
 # Root level files not needed in container
 .git/
