@@ -8,5 +8,5 @@ if [ "$ENVIRONMENT" = "development" ]; then
     exec uvicorn app.main:app --reload --host 0.0.0.0 --port $PORT --log-level debug
 else
     echo "Starting in production mode on port $PORT..."
-    exec uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 4 --log-level info
+    exec uvicorn app.main:app --port $PORT
 fi
