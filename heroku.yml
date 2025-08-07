@@ -2,6 +2,5 @@ build:
   docker:
     web:
       dockerfile: apps/backend/Dockerfile
-      context: .
 run:
   web: /docker-entrypoint.sh
