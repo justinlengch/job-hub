@@ -1,0 +1,101 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv
+.env
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Documentation
+docs/
+
+# Frontend (not needed for backend build)
+apps/web/
+
+# Development files
+apps/backend/tests/
+.env.example
+.env.local
+.env.development
+.env.test
+
+# Root level files not needed in container
+.git/
+.gitignore
+node_modules/
+pnpm-lock.yaml
+pnpm-workspace.yaml
+turbo.json
+package.json
+heroku.yml
+Procfile
+DATABASE_SCHEMA.sql
+.ropeproject/
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Docker
+docker-compose*.yml
+
+# Misc
+.mypy_cache/
+.dmypy.json
+dmypy.json
