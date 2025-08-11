@@ -1,6 +1,5 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalEnv": ["BACKEND_API_URL"],
   "tasks": {
     "build": {
       "outputs": ["dist/**"]
