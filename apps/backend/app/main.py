@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # TODO: Email Parsing Enhancement - Complete Implementation
 # This file coordinates all the email parsing tasks. See individual TODOs in:
 # - Task 1: app/models/llm/llm_email.py
-# - Task 2: app/services/llm.py  
+# - Task 2: app/services/llm.py
 # - Task 3: app/services/application_matcher.py
 # - Task 4-5: app/routes/parse.py
 # - Task 6: app/models/api/email.py
@@ -22,7 +22,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8080",  # Default Vite dev server
         # Add your production frontend URL when deploying
-        "https://job-hub-web.vercel.app/"
+        "https://job-hub-web.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -34,9 +34,10 @@ app.add_middleware(
 async def health_check():
     return {"status": "ok", "message": "Job Hub API is running"}
 
-from app.routes.parse import router as parse_router
-from app.routes.gmail import router as gmail_router
+
 from app.routes.auth import router as auth_router
+from app.routes.gmail import router as gmail_router
+from app.routes.parse import router as parse_router
 
 app.include_router(parse_router, prefix="/api")
 app.include_router(gmail_router)
