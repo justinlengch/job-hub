@@ -1,7 +1,7 @@
 import { EmailParseRequest, EmailParseResponse } from "@/types/application";
 import { supabase } from "./supabase";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE_URL = import.meta.env.BACKEND_API_URL;
 
 const getAuthHeaders = async () => {
   const {

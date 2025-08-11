@@ -11,8 +11,7 @@ const setupUserGmailAutomation = async (session: any) => {
       return;
     }
 
-    const API_BASE_URL =
-      import.meta.env.VITE_API_URL || "http://localhost:8000";
+    const API_BASE_URL = import.meta.env.BACKEND_API_URL;
 
     const response = await fetch(`${API_BASE_URL}/api/auth/setup-user`, {
       method: "POST",
@@ -61,7 +60,6 @@ export const useAuth = () => {
       setUser(session?.user ?? null);
       setLoading(false);
 
-      // Set up Gmail automation for new users
       if (event === "SIGNED_IN" && session) {
         setupUserGmailAutomation(session);
       }
