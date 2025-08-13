@@ -22,7 +22,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8080",  # Default Vite dev server
         # Add your production frontend URL when deploying
-        "https://job-hub-web.vercel.app",
+        "https://job-hub-web.vercel.app/dashboard",
     ],
     allow_credentials=True,
     allow_methods=["*"],
