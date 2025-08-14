@@ -1,15 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# TODO: Email Parsing Enhancement - Complete Implementation
-# This file coordinates all the email parsing tasks. See individual TODOs in:
-# - Task 1: app/models/llm/llm_email.py
-# - Task 2: app/services/llm.py
-# - Task 3: app/services/application_matcher.py
-# - Task 4-5: app/routes/parse.py
-# - Task 6: app/models/api/email.py
-# - Task 7: app/services/error_handler.py
-# - Task 8: app/tests/test_email_parsing.py
+from app.routes.auth import router as auth_router
+from app.routes.gmail import router as gmail_router
+from app.routes.parse import router as parse_router
 
 app = FastAPI(
     title="Job Hub API",
@@ -24,20 +18,22 @@ app.add_middleware(
         # Add your production frontend URL when deploying
         "https://job-hub-web.vercel.app",
     ],
+    allow_origin_regex=r"https://job-hub-web(-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok", "message": "Job Hub API is healthy"}
+
+
 @app.get("/")
 async def health_check():
     return {"status": "ok", "message": "Job Hub API is running"}
 
-
-from app.routes.auth import router as auth_router
-from app.routes.gmail import router as gmail_router
-from app.routes.parse import router as parse_router
 
 app.include_router(parse_router, prefix="/api")
 app.include_router(gmail_router)
