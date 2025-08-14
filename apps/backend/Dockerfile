@@ -10,7 +10,8 @@ RUN useradd --create-home --shell /bin/bash appuser
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv pip sync --system --no-cache pyproject.toml
+RUN uv pip sync --system --no-cache pyproject.toml \
+    && python -c "import fastapi, uvicorn, click; print('Dependency check passed')"
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
