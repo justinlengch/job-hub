@@ -16,12 +16,12 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8080",  # Default Vite dev server
         # Add your production frontend URL when deploying
-        "https://job-hub-web.vercel.app"
+        "https://job-hub-web.vercel.app",
     ],
     allow_origin_regex=r"https://job-hub-web(-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 
@@ -38,8 +38,3 @@ async def health_check():
 app.include_router(parse_router, prefix="/api")
 app.include_router(gmail_router)
 app.include_router(auth_router)
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
