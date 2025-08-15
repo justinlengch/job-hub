@@ -18,7 +18,6 @@ app.add_middleware(
         # Add your production frontend URL when deploying
         "https://job-hub-web.vercel.app",
     ],
-    allow_origin_regex=r"https://job-hub-web(-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
