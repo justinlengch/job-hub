@@ -14,8 +14,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:8080",  # Default Vite dev server
-        # Add your production frontend URL when deploying
+        "http://localhost:8080",
         "https://job-hub-web.vercel.app",
     ],
     allow_credentials=True,
