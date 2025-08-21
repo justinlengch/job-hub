@@ -1,4 +1,5 @@
-from typing import Any, Dict
+import time
+from typing import Any, Dict, Optional
 
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
@@ -15,7 +16,7 @@ from ..base_service import (
 
 
 class GmailService(BaseService):
-    """Service for managing Gmail API operations including labels and filters."""
+    """Service for managing Gmail API operations including labels, filters, and watch lifecycle."""
 
     def __init__(self):
         self.service = None
@@ -30,12 +31,6 @@ class GmailService(BaseService):
     def create_gmail_client(self, user_credentials: Dict[str, Any]) -> bool:
         """
         Create a Gmail API client using user's OAuth credentials.
-
-        Args:
-            user_credentials: Dictionary containing OAuth tokens and refresh tokens
-
-        Returns:
-            bool: True if client creation successful, False otherwise
         """
         try:
             creds = Credentials(
@@ -67,12 +62,6 @@ class GmailService(BaseService):
     ) -> bool:
         """
         Create a Gmail API client using service account credentials.
-
-        Args:
-            service_account_file: Path to service account JSON file
-
-        Returns:
-            bool: True if client creation successful, False otherwise
         """
         try:
             creds = service_account.Credentials.from_service_account_file(
@@ -97,15 +86,6 @@ class GmailService(BaseService):
     def get_or_create_label(self, label_name: str = "Job Applications") -> str:
         """
         Get existing label ID or create a new label for job applications.
-
-        Args:
-            label_name: Name of the label to create/find
-
-        Returns:
-            str: Label ID if successful
-
-        Raises:
-            ServiceOperationError: If operation fails
         """
         if not self.service:
             raise ServiceOperationError("Gmail service not initialized")
@@ -147,21 +127,11 @@ class GmailService(BaseService):
     def create_job_application_filter(self, label_id: str) -> bool:
         """
         Create a Gmail filter to automatically label job application emails.
-
-        Args:
-            label_id: ID of the label to apply to matching emails
-
-        Returns:
-            bool: True if filter creation successful
-
-        Raises:
-            ServiceOperationError: If operation fails
         """
         if not self.service:
             raise ServiceOperationError("Gmail service not initialized")
 
         try:
-            # Check if a similar filter already exists
             existing_filters = self.list_existing_filters()
             for existing_filter in existing_filters:
                 action = existing_filter.get("action", {})
@@ -234,16 +204,6 @@ class GmailService(BaseService):
     ) -> str:
         """
         Complete setup for job application email labeling.
-        Creates label and filter in one operation.
-
-        Args:
-            label_name: Name of the label for job applications
-
-        Returns:
-            str: Label ID if successful setup
-
-        Raises:
-            ServiceOperationError: If operation fails
         """
         if not self.service:
             raise ServiceOperationError("Gmail service not initialized")
@@ -268,12 +228,6 @@ class GmailService(BaseService):
     def list_existing_filters(self) -> list:
         """
         List all existing Gmail filters for the user.
-
-        Returns:
-            list: List of existing filters
-
-        Raises:
-            ServiceOperationError: If operation fails
         """
         if not self.service:
             raise ServiceOperationError("Gmail service not initialized")
@@ -296,15 +250,6 @@ class GmailService(BaseService):
     def delete_filter(self, filter_id: str) -> bool:
         """
         Delete a specific Gmail filter.
-
-        Args:
-            filter_id: ID of the filter to delete
-
-        Returns:
-            bool: True if deletion successful
-
-        Raises:
-            ServiceOperationError: If operation fails
         """
         if not self.service:
             raise ServiceOperationError("Gmail service not initialized")
@@ -320,6 +265,76 @@ class GmailService(BaseService):
         except HttpError as e:
             self._log_error("deleting filter", e)
             raise ServiceOperationError(f"Failed to delete filter: {str(e)}")
+
+    # --- Watch lifecycle helpers ---
+
+    def start_watch(
+        self,
+        topic_fqn: str,
+        label_ids: Optional[list[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Start (or restart) a Gmail push watch.
+        Returns dict with history_id and expiration.
+        """
+        if not self.service:
+            raise ServiceOperationError("Gmail service not initialized")
+
+        body: Dict[str, Any] = {
+            "topicName": topic_fqn,
+        }
+        if label_ids:
+            body["labelIds"] = label_ids
+            body["labelFilterBehavior"] = "INCLUDE"
+
+        try:
+            resp = self.service.users().watch(userId="me", body=body).execute()
+            result = {
+                "history_id": resp.get("historyId"),
+                "expiration": int(resp.get("expiration", 0)),
+            }
+            self._log_operation(
+                "watch started",
+                f"history_id={result['history_id']} exp={result['expiration']}",
+            )
+            return result
+        except HttpError as e:
+            self._log_error("starting watch", e)
+            raise ServiceOperationError(f"Failed to start watch: {e}")
+
+    def stop_watch(self) -> None:
+        """
+        Stop the current Gmail watch (best-effort).
+        """
+        if not self.service:
+            raise ServiceOperationError("Gmail service not initialized")
+        try:
+            self.service.users().stop(userId="me").execute()
+            self._log_operation("watch stopped")
+        except HttpError as e:
+            # Not fatal; log and continue
+            self._log_error("stopping watch", e)
+
+    def refresh_watch_if_needed(
+        self,
+        topic_fqn: str,
+        label_ids: Optional[list[str]],
+        watch_expiration_ms: Optional[int],
+        threshold_seconds: int = 600,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Renew watch if within threshold_seconds of expiration.
+        Returns new watch data when refreshed, else None.
+        """
+        now_ms = int(time.time() * 1000)
+        if not watch_expiration_ms:
+            # No existing watch info; start one
+            return self.start_watch(topic_fqn, label_ids)
+
+        remaining = watch_expiration_ms - now_ms
+        if remaining <= threshold_seconds * 1000:
+            return self.start_watch(topic_fqn, label_ids)
+        return None
 
 
 # Global instance

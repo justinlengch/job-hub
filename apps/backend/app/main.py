@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes.auth import router as auth_router
 from app.routes.gmail import router as gmail_router
 from app.routes.parse import router as parse_router
+from app.routes.pubsub import router as pubsub_router
 
 app = FastAPI(
     title="Job Hub API",
@@ -36,3 +37,4 @@ async def health_check():
 app.include_router(parse_router, prefix="/api")
 app.include_router(gmail_router)
 app.include_router(auth_router)
+app.include_router(pubsub_router, prefix="/api")

@@ -15,5 +15,16 @@ class Settings:
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET")
     GOOGLE_PROJECT_ID: str = os.getenv("GOOGLE_PROJECT_ID")
 
+    PUSH_SA_EMAIL: str = os.getenv("PUSH_SA_EMAIL")
+    PUBSUB_AUDIENCE: str = os.getenv("PUBSUB_AUDIENCE")
+    PROJECT_ID: str = os.getenv("PROJECT_ID") or os.getenv("GOOGLE_PROJECT_ID")
+    PUBSUB_TOPIC: str = os.getenv("PUBSUB_TOPIC")
+    PUBSUB_TOPIC_FQN: str = os.getenv("PUBSUB_TOPIC_FQN")
+    JOB_LABEL_NAME: str = os.getenv("JOB_LABEL_NAME", "Job Applications")
+    GMAIL_SCOPES: str = os.getenv(
+        "GMAIL_SCOPES",
+        "https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.labels,https://www.googleapis.com/auth/gmail.settings.basic",
+    )
+
 
 settings = Settings()
