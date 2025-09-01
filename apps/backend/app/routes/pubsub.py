@@ -19,69 +19,31 @@ async def _resolve_user_by_email(
     supabase, email_address: str
 ) -> Optional[Dict[str, Any]]:
     """
-    Attempt to resolve internal user + Gmail state from email address.
-    This is heuristic because storage schema for mapping may not yet exist.
-    Tries several likely tables/columns; returns first hit:
-      {
-        user_id,
-        gmail_label_id,
-        last_history_id,
-        watch_expiration,
-        access_token,
-        refresh_token
-      }
-    Missing fields may be None.
+    Deterministically resolve a user row by exact match on user_preferences.gmail_email.
+    Returns a dict with fields needed by the pipeline, or None if not found.
     """
-    # 1. Try user_preferences if it stores the gmail email (guessed column names)
-    candidate_columns = ["gmail_email", "primary_email", "email"]
-    for col in candidate_columns:
-        try:
-            resp = (
-                await supabase.table("user_preferences")
-                .select(
-                    "user_id,gmail_label_id,gmail_last_history_id,gmail_watch_expiration,gmail_refresh_cipher_b64,gmail_refresh_nonce_b64"
-                )
-                .eq(col, email_address)
-                .limit(1)
-                .execute()
-            )
-            if resp.data:
-                row = resp.data[0]
-                return {
-                    "user_id": row.get("user_id"),
-                    "gmail_label_id": row.get("gmail_label_id"),
-                    "gmail_last_history_id": row.get("gmail_last_history_id"),
-                    "gmail_watch_expiration": row.get("gmail_watch_expiration"),
-                    "gmail_refresh_cipher_b64": row.get("gmail_refresh_cipher_b64"),
-                    "gmail_refresh_nonce_b64": row.get("gmail_refresh_nonce_b64"),
-                }
-        except Exception:
-            # Column may not exist; continue
-            continue
-
-    # 2. (Optional future) try a dedicated credentials table
-    try:
-        cred_resp = (
-            await supabase.table("user_gmail_credentials")
-            .select("*")
-            .eq("email", email_address)
-            .limit(1)
-            .execute()
+    resp = (
+        await supabase.table("user_preferences")
+        .select(
+            "user_id,gmail_label_id,gmail_last_history_id,gmail_watch_expiration,gmail_refresh_cipher_b64,gmail_refresh_nonce_b64"
         )
-        if cred_resp.data:
-            c = cred_resp.data[0]
-            return {
-                "user_id": c.get("user_id"),
-                "gmail_label_id": c.get("gmail_label_id"),
-                "last_history_id": c.get("last_history_id"),
-                "watch_expiration": c.get("watch_expiration"),
-                "access_token": c.get("access_token"),
-                "refresh_token": c.get("refresh_token"),
-            }
-    except Exception:
-        pass
+        .eq("gmail_email", email_address)
+        .limit(1)
+        .execute()
+    )
 
-    return None
+    if not resp.data:
+        return None
+
+    row = resp.data[0]
+    return {
+        "user_id": row.get("user_id"),
+        "gmail_label_id": row.get("gmail_label_id"),
+        "gmail_last_history_id": row.get("gmail_last_history_id"),
+        "gmail_watch_expiration": row.get("gmail_watch_expiration"),
+        "gmail_refresh_cipher_b64": row.get("gmail_refresh_cipher_b64"),
+        "gmail_refresh_nonce_b64": row.get("gmail_refresh_nonce_b64"),
+    }
 
 
 async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:

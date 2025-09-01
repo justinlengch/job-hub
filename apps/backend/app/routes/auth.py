@@ -221,7 +221,22 @@ async def setup_user_gmail_automation(
         # Set up label and filter
         label_id = gmail_service.setup_job_application_labeling(label_name)
 
-        # Store the label_id in user preferences (optional)
+        # Optionally start Gmail watch and capture initial history/expiration
+        watch_info = None
+        try:
+            if settings.PUBSUB_TOPIC_FQN:
+                watch_info = gmail_service.start_watch(
+                    settings.PUBSUB_TOPIC_FQN, [label_id]
+                )
+                logger.info(f"Started Gmail watch for user {user_id}: {watch_info}")
+            else:
+                logger.info(
+                    "PUBSUB_TOPIC_FQN not configured; skipping Gmail watch start"
+                )
+        except Exception as e:
+            logger.error(f"Failed to start Gmail watch for user {user_id}: {str(e)}")
+
+        # Store the label_id in user preferences (and later, watch info)
         supabase = await supabase_service.get_client()
         await (
             supabase.table("user_preferences")
@@ -235,6 +250,26 @@ async def setup_user_gmail_automation(
             )
             .execute()
         )
+
+        # Persist watch info if available
+        if watch_info:
+            try:
+                await (
+                    supabase.table("user_preferences")
+                    .update(
+                        {
+                            "gmail_last_history_id": watch_info.get("history_id"),
+                            "gmail_watch_expiration": watch_info.get("expiration"),
+                            "updated_at": "now()",
+                        }
+                    )
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to persist watch info for user {user_id}: {str(e)}"
+                )
 
         logger.info(f"Successfully set up Gmail automation for user {user_id}")
         return {

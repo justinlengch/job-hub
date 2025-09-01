@@ -1,10 +1,17 @@
+import asyncio
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.config import settings
 from app.routes.auth import router as auth_router
 from app.routes.gmail import router as gmail_router
 from app.routes.parse import router as parse_router
 from app.routes.pubsub import router as pubsub_router
+from app.services.crypto import decrypt_refresh_token
+from app.services.google.gmail_service import gmail_service
+from app.services.supabase.supabase_client import supabase_service
 
 app = FastAPI(
     title="Job Hub API",
@@ -32,6 +39,86 @@ async def health():
 @app.get("/")
 async def health_check():
     return {"status": "ok", "message": "Job Hub API is running"}
+
+
+logger = logging.getLogger(__name__)
+_refresh_task = None
+
+
+async def _refresh_gmail_watches_once():
+    if not settings.PUBSUB_TOPIC_FQN:
+        return
+    try:
+        supabase = await supabase_service.get_client()
+        resp = await (
+            supabase.table("user_preferences")
+            .select(
+                "user_id,gmail_label_id,gmail_watch_expiration,gmail_refresh_cipher_b64,gmail_refresh_nonce_b64"
+            )
+            .execute()
+        )
+        rows = resp.data or []
+        for row in rows:
+            label_id = row.get("gmail_label_id")
+            exp_ms = row.get("gmail_watch_expiration")
+            cipher_b64 = row.get("gmail_refresh_cipher_b64")
+            nonce_b64 = row.get("gmail_refresh_nonce_b64")
+            if not label_id or not cipher_b64 or not nonce_b64:
+                continue
+            try:
+                refresh_token = decrypt_refresh_token(nonce_b64, cipher_b64)
+                if not gmail_service.create_gmail_client(
+                    {"refresh_token": refresh_token}
+                ):
+                    continue
+                refreshed = gmail_service.refresh_watch_if_needed(
+                    topic_fqn=settings.PUBSUB_TOPIC_FQN,
+                    label_ids=[label_id],
+                    watch_expiration_ms=exp_ms,
+                    threshold_seconds=settings.WATCH_REFRESH_THRESHOLD_SECONDS,
+                )
+                if refreshed:
+                    await (
+                        supabase.table("user_preferences")
+                        .update(
+                            {
+                                "gmail_last_history_id": refreshed.get("history_id"),
+                                "gmail_watch_expiration": refreshed.get("expiration"),
+                                "updated_at": "now()",
+                            }
+                        )
+                        .eq("user_id", row.get("user_id"))
+                        .execute()
+                    )
+            except Exception as e:
+                logger.warning(f"watch_refresh user={row.get('user_id')} err={e}")
+    except Exception as e:
+        logger.error(f"watch_refresh batch err={e}")
+
+
+async def _refresh_loop():
+    interval = settings.WATCH_REFRESH_INTERVAL_SECONDS
+    while True:
+        await _refresh_gmail_watches_once()
+        await asyncio.sleep(interval)
+
+
+@app.on_event("startup")
+async def _on_startup():
+    global _refresh_task
+    if settings.PUBSUB_TOPIC_FQN:
+        _refresh_task = asyncio.create_task(_refresh_loop())
+
+
+@app.on_event("shutdown")
+async def _on_shutdown():
+    global _refresh_task
+    if _refresh_task:
+        _refresh_task.cancel()
+        try:
+            await _refresh_task
+        except Exception:
+            pass
 
 
 app.include_router(parse_router, prefix="/api")

@@ -28,6 +28,12 @@ class Settings:
         "GMAIL_SCOPES",
         "https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.labels,https://www.googleapis.com/auth/gmail.settings.basic",
     )
+    WATCH_REFRESH_INTERVAL_SECONDS: int = int(
+        os.getenv("WATCH_REFRESH_INTERVAL_SECONDS", "300")
+    )
+    WATCH_REFRESH_THRESHOLD_SECONDS: int = int(
+        os.getenv("WATCH_REFRESH_THRESHOLD_SECONDS", "600")
+    )
 
 
 settings = Settings()
