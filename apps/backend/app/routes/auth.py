@@ -239,18 +239,47 @@ async def setup_user_gmail_automation(
 
         # Store the label_id in user preferences (and later, watch info)
         supabase = await supabase_service.get_client()
-        await (
+        # First update existing row to avoid overwriting encrypted fields with nulls
+        update_resp = await (
             supabase.table("user_preferences")
-            .upsert(
+            .update(
                 {
-                    "user_id": user_id,
                     "gmail_label_id": label_id,
                     "gmail_automation_enabled": True,
                     "updated_at": "now()",
                 }
             )
+            .eq("user_id", user_id)
             .execute()
         )
+        # If no existing row, insert a new one
+        if not update_resp.data:
+            supabase = await supabase_service.get_client()
+            update_resp = await (
+                supabase.table("user_preferences")
+                .update(
+                    {
+                        "gmail_label_id": label_id,
+                        "gmail_automation_enabled": True,
+                        "updated_at": "now()",
+                    }
+                )
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not update_resp.data:
+                await (
+                    supabase.table("user_preferences")
+                    .insert(
+                        {
+                            "user_id": user_id,
+                            "gmail_label_id": label_id,
+                            "gmail_automation_enabled": True,
+                            "updated_at": "now()",
+                        }
+                    )
+                    .execute()
+                )
 
         # Persist watch info if available
         if watch_info:
