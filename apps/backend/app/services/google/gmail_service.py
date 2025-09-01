@@ -46,8 +46,15 @@ class GmailService(BaseService):
                 ],
             )
 
-            if creds.expired and creds.refresh_token:
-                creds.refresh(Request())
+            if not creds.valid:
+                if creds.refresh_token:
+                    creds.refresh(Request())
+                else:
+                    self._log_error(
+                        "creating Gmail client",
+                        ValueError("Missing refresh_token; cannot mint access token"),
+                    )
+                    return False
 
             self.service = build("gmail", "v1", credentials=creds)
             self._log_operation("Gmail client created successfully")

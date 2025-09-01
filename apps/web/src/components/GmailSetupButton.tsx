@@ -28,33 +28,30 @@ export const GmailSetupButton = () => {
         return;
       }
 
-      const { provider_token, provider_refresh_token } = session.data.session;
+      const API_BASE_URL = import.meta.env.VITE_API_URL;
 
-      if (!provider_token || !provider_refresh_token) {
-        setSetupStatus(
-          "No Gmail tokens found. Please sign in again with Gmail permissions."
-        );
+      // Start backend-only OAuth: get Google consent URL from backend and redirect
+      const redirectUri = `${API_BASE_URL}/api/auth/google/callback`;
+      const successUrl = `${window.location.origin}/settings?gmail=connected`;
+      const params = new URLSearchParams({ redirect_uri: redirectUri, success_url: successUrl });
+      const startUrl = `${API_BASE_URL}/api/auth/google/start?${params.toString()}`;
+
+      const startResp = await fetch(startUrl, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${session.data.session.access_token}`,
+        },
+      });
+
+      if (!startResp.ok) {
+        const errText = await startResp.text();
+        setSetupStatus(`Failed to initiate Google OAuth: ${errText}`);
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_API_URL;
-
-      const response = await fetch(`${API_BASE_URL}/api/auth/setup-user`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.data.session.access_token}`,
-        },
-        body: JSON.stringify({
-          access_token: provider_token,
-          refresh_token: provider_refresh_token,
-          setup_gmail_automation: true,
-          label_name: "Job Applications",
-        }),
-      });
-
-      const result = await response.json();
-      setSetupStatus(result.success ? result.message : result.error);
+      const { auth_url } = await startResp.json();
+      setSetupStatus("Redirecting to Google for consent...");
+      window.location.assign(auth_url);
     } catch (error) {
       setSetupStatus("Setup failed. Please try again.");
     } finally {

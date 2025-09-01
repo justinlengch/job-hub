@@ -10,6 +10,9 @@ class Settings:
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY")
+    CRYPTO_KEY_B64: str = os.getenv("CRYPTO_KEY_B64")
+    GMAIL_KEY_VERSION: int = int(os.getenv("GMAIL_KEY_VERSION", "1"))
+    FRONTEND_BASE_URL: str = os.getenv("FRONTEND_BASE_URL")
 
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET")

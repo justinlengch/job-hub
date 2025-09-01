@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from app.models.llm.llm_email import EmailIntent, LLMEmailInput, LLMEmailOutput
@@ -28,32 +28,60 @@ class EmailParsingService(BaseService):
         body_text: str,
         body_html: Optional[str] = None,
         received_at: Optional[datetime] = None,
+        thread_id: Optional[str] = None,
+        history_id: Optional[int] = None,
         max_retries: int = 3,
     ) -> Dict[str, Any]:
         """
-        Main email processing workflow to parse emails into job applications or events.
-
-        Args:
-            parsed: LLMEmailOutput containing the extracted job information
-            raw_email_id: External email ID for deduplication
-            user_id: The user ID to associate with the application
-            sender: Email sender
-            subject: Email subject
-            body_text: Plain text body of the email
-            body_html: HTML body of the email
-            received_at: Timestamp when email was received
-            max_retries: Maximum number of retry attempts
-
-        Returns:
-            Dict containing the processing results
-
-        Raises:
-            ServiceOperationError: If all retry attempts fail
+        Main email processing workflow WITHOUT storing full email contents.
+        - Deduplicate and persist a minimal reference in `email_refs`
+        - Link to job_applications/application_events based on intent
         """
         try:
             supabase = await supabase_service.get_client()
 
-            # For non-job emails, skip database storage entirely
+            # Idempotency: check existing minimal reference
+            existing_ref = (
+                await supabase.table("email_refs")
+                .select("email_id")
+                .eq("user_id", user_id)
+                .eq("external_email_id", raw_email_id)
+                .limit(1)
+                .execute()
+            )
+
+            if existing_ref.data:
+                self._log_operation("email_ref already exists", f"ID: {raw_email_id}")
+                return {
+                    "status": "duplicate",
+                    "email_id": existing_ref.data[0]["email_id"],
+                }
+
+            # Insert minimal reference (no bodies)
+            ref_payload: Dict[str, Any] = {
+                "user_id": user_id,
+                "external_email_id": raw_email_id,
+                "received_at": received_at.isoformat()
+                if received_at
+                else datetime.now().isoformat(),
+            }
+            if thread_id:
+                ref_payload["thread_id"] = thread_id
+            if history_id is not None:
+                try:
+                    ref_payload["history_id"] = int(history_id)
+                except Exception:
+                    ref_payload["history_id"] = history_id
+
+            ref_insert = (
+                await supabase.table("email_refs").insert(ref_payload).execute()
+            )
+            if not ref_insert.data:
+                raise ServiceOperationError("Failed to insert email reference")
+
+            email_id = ref_insert.data[0]["email_id"]
+
+            # For non-job emails, skip creating application/events, keep the ref only
             if parsed.intent == EmailIntent.GENERAL:
                 self._log_operation(
                     "non job-related email skipped",
@@ -63,42 +91,8 @@ class EmailParsingService(BaseService):
                     "status": "skipped",
                     "intent": parsed.intent.value,
                     "reason": "not_job_related",
+                    "email_id": email_id,
                 }
-
-            existing_email = (
-                await supabase.table("emails")
-                .select("email_id")
-                .eq("external_email_id", raw_email_id)
-                .execute()
-            )
-
-            if existing_email.data:
-                self._log_operation("email already processed", f"ID: {raw_email_id}")
-                return {
-                    "status": "duplicate",
-                    "email_id": existing_email.data[0]["email_id"],
-                }
-
-            email_data = {
-                "user_id": user_id,
-                "external_email_id": raw_email_id,
-                "sender": sender,
-                "subject": subject,
-                "body_text": body_text,
-                "body_html": body_html,
-                "received_at": received_at.isoformat()
-                if received_at
-                else datetime.now().isoformat(),
-                "parsed_at": datetime.now().isoformat(),
-            }
-
-            email_response = await supabase.table("emails").insert(email_data).execute()
-
-            if not email_response.data:
-                raise ServiceOperationError("Failed to insert raw email record")
-
-            email_record = email_response.data[0]
-            email_id = email_record["email_id"]
 
             result = {
                 "status": "processed",
@@ -130,7 +124,7 @@ email_parsing_service = EmailParsingService()
 
 async def parse_and_persist(ref: dict, user_id: str, gmail_client) -> dict:
     """
-    Fetch Gmail message (full), run LLM parsing, persist via existing workflow.
+    Fetch Gmail message (full), run LLM parsing, persist minimal ref + link via existing workflow.
     ref keys: messageId, threadId, historyId
     """
     msg = (
@@ -143,6 +137,17 @@ async def parse_and_persist(ref: dict, user_id: str, gmail_client) -> dict:
     headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
     subject = headers.get("subject", "")
     sender = headers.get("from", "")
+
+    # Compute received_at from Gmail internalDate (ms since epoch)
+    received_at_dt: Optional[datetime] = None
+    try:
+        internal_ms = msg.get("internalDate")
+        if internal_ms:
+            received_at_dt = datetime.fromtimestamp(
+                int(internal_ms) / 1000, tz=timezone.utc
+            )
+    except Exception:
+        received_at_dt = None
 
     def _collect_text(part) -> str:
         if not part:
@@ -187,5 +192,7 @@ async def parse_and_persist(ref: dict, user_id: str, gmail_client) -> dict:
         subject=subject,
         body_text=body_text,
         body_html=None,
-        received_at=None,
+        received_at=received_at_dt,
+        thread_id=ref.get("threadId"),
+        history_id=ref.get("historyId"),
     )

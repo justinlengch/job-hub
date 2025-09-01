@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 
+from app.services.crypto import decrypt_refresh_token
 from app.services.google.gmail_history_service import gmail_history_service
 from app.services.google.gmail_service import gmail_service
 from app.services.google.pubsub_service import pubsub_service
@@ -38,7 +39,7 @@ async def _resolve_user_by_email(
             resp = (
                 await supabase.table("user_preferences")
                 .select(
-                    f"user_id,gmail_label_id,last_history_id,watch_expiration,access_token,refresh_token,{col}"
+                    "user_id,gmail_label_id,gmail_last_history_id,gmail_watch_expiration,gmail_refresh_cipher_b64,gmail_refresh_nonce_b64"
                 )
                 .eq(col, email_address)
                 .limit(1)
@@ -49,10 +50,10 @@ async def _resolve_user_by_email(
                 return {
                     "user_id": row.get("user_id"),
                     "gmail_label_id": row.get("gmail_label_id"),
-                    "last_history_id": row.get("last_history_id"),
-                    "watch_expiration": row.get("watch_expiration"),
-                    "access_token": row.get("access_token"),
-                    "refresh_token": row.get("refresh_token"),
+                    "gmail_last_history_id": row.get("gmail_last_history_id"),
+                    "gmail_watch_expiration": row.get("gmail_watch_expiration"),
+                    "gmail_refresh_cipher_b64": row.get("gmail_refresh_cipher_b64"),
+                    "gmail_refresh_nonce_b64": row.get("gmail_refresh_nonce_b64"),
                 }
         except Exception:
             # Column may not exist; continue
@@ -103,7 +104,7 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
 
         user_id = user_state["user_id"]
         label_id = user_state.get("gmail_label_id")
-        last_history_id = user_state.get("last_history_id")
+        last_history_id = user_state.get("gmail_last_history_id")
 
         if not user_id or not label_id:
             logger.warning(
@@ -111,15 +112,26 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
             )
             return
 
-        creds = {
-            "access_token": user_state.get("access_token"),
-            "refresh_token": user_state.get("refresh_token"),
-        }
-        if not creds["access_token"] or not creds["refresh_token"]:
+        cipher_b64 = user_state.get("gmail_refresh_cipher_b64")
+        nonce_b64 = user_state.get("gmail_refresh_nonce_b64")
+        if not cipher_b64 or not nonce_b64:
             logger.warning(
-                f"gmail_push missing_tokens user={user_id} email={email_address}"
+                f"gmail_push missing_encrypted_refresh user={user_id} email={email_address}"
             )
             return
+
+        try:
+            refresh_token = decrypt_refresh_token(nonce_b64, cipher_b64)
+        except Exception as e:
+            logger.error(
+                f"gmail_push decrypt_failed user={user_id} email={email_address} err={e}"
+            )
+            return
+
+        creds = {
+            "access_token": None,
+            "refresh_token": refresh_token,
+        }
 
         if not gmail_service.create_gmail_client(creds):
             logger.error(
@@ -156,7 +168,9 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
         try:
             await (
                 supabase.table("user_preferences")
-                .update({"last_history_id": latest_history_id, "updated_at": "now()"})
+                .update(
+                    {"gmail_last_history_id": latest_history_id, "updated_at": "now()"}
+                )
                 .eq("user_id", user_id)
                 .execute()
             )
