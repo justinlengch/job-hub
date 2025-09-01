@@ -78,12 +78,23 @@ async def _refresh_gmail_watches_once():
                     threshold_seconds=settings.WATCH_REFRESH_THRESHOLD_SECONDS,
                 )
                 if refreshed:
+                    exp_iso = None
+                    try:
+                        exp_ms = refreshed.get("expiration")
+                        if exp_ms:
+                            from datetime import datetime, timezone
+
+                            exp_iso = datetime.fromtimestamp(
+                                int(exp_ms) / 1000, tz=timezone.utc
+                            ).isoformat()
+                    except Exception:
+                        exp_iso = None
                     await (
                         supabase.table("user_preferences")
                         .update(
                             {
                                 "gmail_last_history_id": refreshed.get("history_id"),
-                                "gmail_watch_expiration": refreshed.get("expiration"),
+                                "gmail_watch_expiration": exp_iso,
                                 "updated_at": "now()",
                             }
                         )

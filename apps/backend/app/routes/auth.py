@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 
@@ -254,12 +255,21 @@ async def setup_user_gmail_automation(
         # Persist watch info if available
         if watch_info:
             try:
+                exp_iso = None
+                try:
+                    exp_ms = watch_info.get("expiration")
+                    if exp_ms:
+                        exp_iso = datetime.fromtimestamp(
+                            int(exp_ms) / 1000, tz=timezone.utc
+                        ).isoformat()
+                except Exception:
+                    exp_iso = None
                 await (
                     supabase.table("user_preferences")
                     .update(
                         {
                             "gmail_last_history_id": watch_info.get("history_id"),
-                            "gmail_watch_expiration": watch_info.get("expiration"),
+                            "gmail_watch_expiration": exp_iso,
                             "updated_at": "now()",
                         }
                     )
