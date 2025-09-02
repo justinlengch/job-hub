@@ -219,6 +219,14 @@ async def setup_user_gmail_automation(
             logger.error(f"Failed to create Gmail client for user {user_id}")
             return {"success": False, "error": "Failed to authenticate with Gmail"}
 
+        # Fetch Gmail profile email (fallback if OAuth id_token lacked email)
+        profile_email: Optional[str] = None
+        try:
+            prof = gmail_service.service.users().getProfile(userId="me").execute()
+            profile_email = prof.get("emailAddress")
+        except Exception:
+            profile_email = None
+
         # Set up label and filter
         label_id = gmail_service.setup_job_application_labeling(label_name)
 
@@ -239,47 +247,43 @@ async def setup_user_gmail_automation(
 
         # Store the label_id in user preferences (and later, watch info)
         supabase = await supabase_service.get_client()
+
+        # Check if gmail_email is already set; only fill it if missing
+        existing_pref = await (
+            supabase.table("user_preferences")
+            .select("gmail_email")
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
+        update_payload: Dict[str, Any] = {
+            "gmail_label_id": label_id,
+            "gmail_automation_enabled": True,
+            "updated_at": "now()",
+        }
+        if profile_email and (
+            not existing_pref.data or not existing_pref.data.get("gmail_email")
+        ):
+            update_payload["gmail_email"] = profile_email
+
         # First update existing row to avoid overwriting encrypted fields with nulls
         update_resp = await (
             supabase.table("user_preferences")
-            .update(
-                {
-                    "gmail_label_id": label_id,
-                    "gmail_automation_enabled": True,
-                    "updated_at": "now()",
-                }
-            )
+            .update(update_payload)
             .eq("user_id", user_id)
             .execute()
         )
         # If no existing row, insert a new one
         if not update_resp.data:
-            supabase = await supabase_service.get_client()
-            update_resp = await (
-                supabase.table("user_preferences")
-                .update(
-                    {
-                        "gmail_label_id": label_id,
-                        "gmail_automation_enabled": True,
-                        "updated_at": "now()",
-                    }
-                )
-                .eq("user_id", user_id)
-                .execute()
-            )
-            if not update_resp.data:
-                await (
-                    supabase.table("user_preferences")
-                    .insert(
-                        {
-                            "user_id": user_id,
-                            "gmail_label_id": label_id,
-                            "gmail_automation_enabled": True,
-                            "updated_at": "now()",
-                        }
-                    )
-                    .execute()
-                )
+            insert_payload = {
+                "user_id": user_id,
+                "gmail_label_id": label_id,
+                "gmail_automation_enabled": True,
+                "updated_at": "now()",
+            }
+            if profile_email:
+                insert_payload["gmail_email"] = profile_email
+            await supabase.table("user_preferences").insert(insert_payload).execute()
 
         # Persist watch info if available
         if watch_info:
