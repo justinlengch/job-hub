@@ -249,6 +249,32 @@ async def setup_user_gmail_automation(
         supabase = await supabase_service.get_client()
 
         # Check if gmail_email is already set; only fill it if missing
+        # Persist encrypted refresh token for later background operations
+        if refresh_token:
+            try:
+                enc = crypto_service.encrypt(refresh_token)
+                await (
+                    supabase.table("user_preferences")
+                    .upsert(
+                        {
+                            "user_id": user_id,
+                            "gmail_refresh_cipher_b64": enc["gmail_refresh_cipher_b64"],
+                            "gmail_refresh_nonce_b64": enc["gmail_refresh_nonce_b64"],
+                            "gmail_key_version": int(enc["gmail_key_version"]),
+                            "updated_at": "now()",
+                        }
+                    )
+                    .execute()
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to persist encrypted Gmail refresh token for user {user_id}: {str(e)}"
+                )
+        else:
+            logger.warning(
+                f"No refresh_token provided for user {user_id}; skipping encryption persistence"
+            )
+
         existing_pref = await (
             supabase.table("user_preferences")
             .select("gmail_email")

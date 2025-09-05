@@ -30,28 +30,35 @@ export const GmailSetupButton = () => {
 
       const API_BASE_URL = import.meta.env.VITE_API_URL;
 
-      // Start backend-only OAuth: get Google consent URL from backend and redirect
       const redirectUri = `${API_BASE_URL}/api/auth/google/callback`;
-      const successUrl = `${window.location.origin}/settings?gmail=connected`;
-      const params = new URLSearchParams({ redirect_uri: redirectUri, success_url: successUrl });
-      const startUrl = `${API_BASE_URL}/api/auth/google/start?${params.toString()}`;
+      const successUrl = `${window.location.origin}/settings/integrations`;
 
-      const startResp = await fetch(startUrl, {
+      const startUrl = new URL(`${API_BASE_URL}/api/auth/google/start`);
+      startUrl.searchParams.set("redirect_uri", redirectUri);
+      startUrl.searchParams.set("success_url", successUrl);
+
+
+      const response = await fetch(startUrl.toString(), {
         method: "GET",
         headers: {
           Authorization: `Bearer ${session.data.session.access_token}`,
         },
       });
 
-      if (!startResp.ok) {
-        const errText = await startResp.text();
-        setSetupStatus(`Failed to initiate Google OAuth: ${errText}`);
+      if (!response.ok) {
+        const errText = await response.text();
+        setSetupStatus(`Failed to start Google OAuth: ${errText}`);
         return;
       }
 
-      const { auth_url } = await startResp.json();
-      setSetupStatus("Redirecting to Google for consent...");
-      window.location.assign(auth_url);
+      const data = await response.json();
+      if (data?.auth_url) {
+        setSetupStatus("Redirecting to Google for consent...");
+        window.location.href = data.auth_url;
+        return;
+      }
+
+      setSetupStatus("Failed to get Google OAuth URL. Please try again.");
     } catch (error) {
       setSetupStatus("Setup failed. Please try again.");
     } finally {
