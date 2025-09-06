@@ -14,7 +14,7 @@ import { useGmailAutomation } from "@/hooks/useGmailAutomation";
 export const GmailSetupButton = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [setupStatus, setSetupStatus] = useState<string | null>(null);
-  const { isEnabled, isLoading: checkingStatus } = useGmailAutomation();
+  const { isEnabled, isLinked, isLoading: checkingStatus } = useGmailAutomation();
 
   const handleGmailSetup = async () => {
     setIsLoading(true);
@@ -94,18 +94,40 @@ export const GmailSetupButton = () => {
           Gmail Integration
         </CardTitle>
         <CardDescription>
-          {isEnabled
+          {!isLinked
+            ? "Link your Gmail account to set up automatic email parsing"
+            : isEnabled
             ? "Gmail automation is active and monitoring your emails"
-            : "Set up automatic email parsing and organization"}
+            : "Gmail is linked; enable automation to start monitoring"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {isEnabled ? (
-          <div className="flex items-center gap-2 text-green-600">
-            <CheckCircle className="h-4 w-4" />
-            <span className="text-sm font-medium">
-              Gmail automation is enabled
-            </span>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-green-600">
+              <CheckCircle className="h-4 w-4" />
+              <span className="text-sm font-medium">
+                Gmail automation is enabled
+              </span>
+            </div>
+            <Button
+              onClick={handleGmailSetup}
+              disabled={isLoading}
+              variant="outline"
+              className="w-full"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Opening Google consent...
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Re-link Gmail Account
+                </>
+              )}
+            </Button>
           </div>
         ) : (
           <>

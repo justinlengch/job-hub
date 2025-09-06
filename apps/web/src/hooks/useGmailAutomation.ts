@@ -3,6 +3,7 @@ import { supabase } from "@/services/supabase";
 
 export const useGmailAutomation = () => {
   const [isEnabled, setIsEnabled] = useState(false);
+  const [isLinked, setIsLinked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -29,7 +30,12 @@ export const useGmailAutomation = () => {
         const result = await response.json();
 
         if (result.success) {
-          setIsEnabled(result.preferences?.gmail_automation_enabled || false);
+          const linked = Boolean(
+            result.preferences?.gmail_refresh_nonce_b64 &&
+              result.preferences?.gmail_refresh_cipher_b64
+          );
+          setIsLinked(linked);
+          setIsEnabled(Boolean(result.preferences?.gmail_automation_enabled && linked));
         }
       } catch (error) {
         console.error("Error checking Gmail automation status:", error);
@@ -41,5 +47,5 @@ export const useGmailAutomation = () => {
     checkAutomationStatus();
   }, []);
 
-  return { isEnabled, isLoading };
+  return { isEnabled, isLinked, isLoading };
 };
