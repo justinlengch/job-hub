@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { JobApplication, ApplicationEvent } from "@/types/application";
-import { emailRefsService, buildGmailUrlWithPrefs, applicationEventsService } from "@/services/supabase";
+import { emailRefsService, buildGmailUrlWithPrefs, applicationEventsService, jobApplicationsService } from "@/services/supabase";
 import {
   Search,
   Download,
@@ -16,13 +16,16 @@ import {
   DollarSign,
   Calendar,
   ExternalLink,
+  Trash,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import TimelineEventComponent from "@/components/TimelineEvent";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 
 interface ApplicationsTableProps {
   applications: JobApplication[];
+  onDelete?: (id: string) => void;
 }
 
 const statusColors = {
@@ -35,7 +38,7 @@ const statusColors = {
   WITHDRAWN: "bg-gray-100 text-gray-800",
 };
 
-const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
+const ApplicationsTable = ({ applications, onDelete }: ApplicationsTableProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] =
     useState<keyof JobApplication>("created_at");
@@ -48,8 +51,16 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
   const [eventsLoading, setEventsLoading] = useState(false);
   const itemsPerPage = 10;
 
+  const [localApps, setLocalApps] = useState<JobApplication[]>(applications);
+  useEffect(() => {
+    setLocalApps(applications);
+  }, [applications]);
+
+  const [deleteDialogId, setDeleteDialogId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   // Filter applications based on search term
-  const filteredApplications = applications.filter(
+  const filteredApplications = localApps.filter(
     (app) =>
       app.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -83,15 +94,15 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
         const entries = await Promise.all(
           paginatedApplications.map(async (application) => {
             try {
-              const appId = (application as any).id || (application as any).application_id;
+              const appId = application.id;
               const ref = await emailRefsService.getLatestRefByApplicationId(appId);
               let url = "";
               if (ref) {
                 url = await buildGmailUrlWithPrefs(ref.external_email_id, ref.thread_id);
               }
-              return [((application as any).id || (application as any).application_id), url] as const;
+              return [application.id, url] as const;
             } catch {
-              return [((application as any).id || (application as any).application_id), ""] as const;
+              return [application.id, ""] as const;
             }
           })
         );
@@ -133,7 +144,7 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
     setDetailsOpen(true);
     setEventsLoading(true);
     try {
-      const appId = (application as any).id || (application as any).application_id;
+      const appId = application.id;
       const list = await applicationEventsService.getEventsWithEmailRefsByApplicationId(
         appId
       );
@@ -142,6 +153,30 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
       setAppEvents([]);
     } finally {
       setEventsLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await jobApplicationsService.deleteApplication(id);
+      setLocalApps((prev) =>
+        prev.filter((app) => app.id !== id)
+      );
+      if (selectedApp) {
+        if (selectedApp.id === id) {
+          setDetailsOpen(false);
+          setSelectedApp(null);
+        }
+      }
+      if (onDelete) {
+        onDelete(id);
+      }
+    } catch (err) {
+      // no-op: surface via UI as needed
+    } finally {
+      setDeletingId(null);
+      setDeleteDialogId(null);
     }
   };
 
@@ -204,12 +239,56 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
       <div className="grid gap-4">
         {paginatedApplications.map((application) => (
           <Card
-            key={(application as any).id || (application as any).application_id}
+            key={application.id}
             onClick={() => handleOpenDetails(application)}
-            className="p-6 hover:shadow-md transition-shadow duration-200 cursor-pointer"
+            className="relative p-6 hover:shadow-md transition-shadow duration-200 cursor-pointer"
             role="button"
             tabIndex={0}
           >
+            <AlertDialog
+              open={deleteDialogId === application.id}
+              onOpenChange={(open) =>
+                setDeleteDialogId(open ? application.id : null)
+              }
+            >
+              <Button
+                variant="destructive"
+                size="sm"
+                className="absolute top-3 right-3"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteDialogId(application.id);
+                }}
+                disabled={deletingId === application.id}
+              >
+                <Trash className="h-4 w-4" />
+                Delete
+              </Button>
+              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete application?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete this job application and its events. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const id = application.id;
+                      handleDelete(id);
+                    }}
+                    disabled={deletingId === application.id}
+                  >
+                    Confirm Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Company and Position */}
               <div className="space-y-2">
@@ -252,9 +331,9 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
                     {new Date(application.created_at).toLocaleDateString()}
                   </span>
                 </div>
-                {gmailLinks[application.id || (application as any).application_id] && (
+                {gmailLinks[application.id] && (
                   <a
-                    href={gmailLinks[application.id || (application as any).application_id]}
+                    href={gmailLinks[application.id]}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm text-primary hover:underline inline-flex items-center gap-1"

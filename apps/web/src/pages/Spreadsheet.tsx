@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, XCircle } from "lucide-react";
 
 const Spreadsheet = () => {
-  const { applications, loading, error } = useApplications();
+  const { applications, loading, error, deleteApplication } = useApplications();
 
   // Show loading state
   if (loading) {
@@ -64,7 +64,7 @@ const Spreadsheet = () => {
             <CardTitle>All Applications ({applications.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <ApplicationsTable applications={applications} />
+            <ApplicationsTable applications={applications} onDelete={deleteApplication} />
           </CardContent>
         </Card>
       </main>

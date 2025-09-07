@@ -9,6 +9,7 @@ interface TimelineEventProps {
 
 const eventTypeColors = {
   APPLICATION_SUBMITTED: "bg-blue-100 text-blue-800",
+  APPLICATION_RECEIVED: "bg-blue-100 text-blue-800",
   APPLICATION_VIEWED: "bg-blue-100 text-blue-800",
   APPLICATION_REVIEWED: "bg-purple-100 text-purple-800",
   ASSESSMENT_RECEIVED: "bg-purple-100 text-purple-800",

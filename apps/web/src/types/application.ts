@@ -9,6 +9,7 @@ export type ApplicationStatus =
 
 export type ApplicationEventType =
   | "APPLICATION_SUBMITTED"
+  | "APPLICATION_RECEIVED"
   | "APPLICATION_VIEWED"
   | "APPLICATION_REVIEWED"
   | "ASSESSMENT_RECEIVED"
