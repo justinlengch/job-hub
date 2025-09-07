@@ -44,6 +44,8 @@ export interface ApplicationEvent {
   event_date: string;
   description?: string;
   email_id?: string;
+  gmail_url?: string;
+  email_received_at?: string;
   created_at: string;
 }
 

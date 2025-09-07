@@ -3,8 +3,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { JobApplication } from "@/types/application";
-import { emailRefsService, buildGmailUrlWithPrefs } from "@/services/supabase";
+import { JobApplication, ApplicationEvent } from "@/types/application";
+import { emailRefsService, buildGmailUrlWithPrefs, applicationEventsService } from "@/services/supabase";
 import {
   Search,
   Download,
@@ -17,6 +17,8 @@ import {
   Calendar,
   ExternalLink,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import TimelineEventComponent from "@/components/TimelineEvent";
 
 interface ApplicationsTableProps {
   applications: JobApplication[];
@@ -39,6 +41,10 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [gmailLinks, setGmailLinks] = useState<Record<string, string>>({});
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<JobApplication | null>(null);
+  const [appEvents, setAppEvents] = useState<ApplicationEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
   const itemsPerPage = 10;
 
   // Filter applications based on search term
@@ -76,16 +82,15 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
         const entries = await Promise.all(
           paginatedApplications.map(async (application) => {
             try {
-              const ref = await emailRefsService.getLatestRefByApplicationId(
-                application.id
-              );
+              const appId = (application as any).id || (application as any).application_id;
+              const ref = await emailRefsService.getLatestRefByApplicationId(appId);
               let url = "";
               if (ref) {
                 url = await buildGmailUrlWithPrefs(ref.external_email_id, ref.thread_id);
               }
-              return [application.id, url] as const;
+              return [((application as any).id || (application as any).application_id), url] as const;
             } catch {
-              return [application.id, ""] as const;
+              return [((application as any).id || (application as any).application_id), ""] as const;
             }
           })
         );
@@ -119,6 +124,23 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
     } else {
       setSortField(field);
       setSortDirection("asc");
+    }
+  };
+
+  const handleOpenDetails = async (application: JobApplication) => {
+    setSelectedApp(application);
+    setDetailsOpen(true);
+    setEventsLoading(true);
+    try {
+      const appId = (application as any).id || (application as any).application_id;
+      const list = await applicationEventsService.getEventsWithEmailRefsByApplicationId(
+        appId
+      );
+      setAppEvents(list);
+    } catch {
+      setAppEvents([]);
+    } finally {
+      setEventsLoading(false);
     }
   };
 
@@ -181,8 +203,11 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
       <div className="grid gap-4">
         {paginatedApplications.map((application) => (
           <Card
-            key={application.id}
-            className="p-6 hover:shadow-md transition-shadow duration-200"
+            key={(application as any).id || (application as any).application_id}
+            onClick={() => handleOpenDetails(application)}
+            className="p-6 hover:shadow-md transition-shadow duration-200 cursor-pointer"
+            role="button"
+            tabIndex={0}
           >
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Company and Position */}
@@ -226,9 +251,9 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
                     {new Date(application.created_at).toLocaleDateString()}
                   </span>
                 </div>
-                {gmailLinks[application.id] && (
+                {gmailLinks[application.id || (application as any).application_id] && (
                   <a
-                    href={gmailLinks[application.id]}
+                    href={gmailLinks[application.id || (application as any).application_id]}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm text-primary hover:underline inline-flex items-center gap-1"
@@ -251,6 +276,27 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
           </Card>
         ))}
       </div>
+
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedApp ? `${selectedApp.company} — ${selectedApp.role}` : "Application Details"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {eventsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading events...</p>
+            ) : appEvents.length ? (
+              appEvents.map((event) => (
+                <TimelineEventComponent key={event.id} event={event} />
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No events yet</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Pagination */}
       {totalPages > 1 && (

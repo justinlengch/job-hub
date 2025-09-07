@@ -24,7 +24,7 @@ export const jobApplicationsService = {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({ ...row, id: row.application_id }));
   },
 
   async getApplicationById(id: string): Promise<JobApplication | null> {
@@ -48,13 +48,13 @@ export const jobApplicationsService = {
     const { data, error } = await supabase
       .from("job_applications")
       .update(updates)
-      .eq("id", id)
+      .eq("application_id", id)
       .eq("user_id", userId)
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    return data ? ({ ...(data as any), id: (data as any).application_id } as any) : null;
   },
 
   async deleteApplication(id: string): Promise<void> {
@@ -62,7 +62,7 @@ export const jobApplicationsService = {
     const { error } = await supabase
       .from("job_applications")
       .delete()
-      .eq("id", id)
+      .eq("application_id", id)
       .eq("user_id", userId);
 
     if (error) throw error;
@@ -77,7 +77,7 @@ export const jobApplicationsService = {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({ ...row, id: row.application_id }));
   },
 
   async createApplication(
@@ -94,7 +94,7 @@ export const jobApplicationsService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return { ...(data as any), id: (data as any).application_id } as any;
   },
 };
 
@@ -169,6 +169,133 @@ export const applicationEventsService = {
 
     if (error) throw error;
   },
+
+  async getEventsWithEmailRefsByApplicationId(
+    applicationId: string
+  ): Promise<ApplicationEvent[]> {
+    const { data, error } = await supabase
+      .from("application_events")
+      .select(`
+        *,
+        job_applications!inner(company,role)
+      `)
+      .eq("application_id", applicationId);
+
+    if (error) throw error;
+    const events = (data || []).map((e: any) => ({
+      ...e,
+      company: e?.company ?? e?.job_applications?.company ?? undefined,
+      role: e?.role ?? e?.job_applications?.role ?? undefined,
+    }));
+
+    const emailIds = Array.from(
+      new Set(events.map((e: any) => e.email_id).filter(Boolean))
+    ) as string[];
+
+    let refsById: Record<string, any> = {};
+    if (emailIds.length) {
+      const { data: refData, error: refErr } = await supabase
+        .from("email_refs")
+        .select("email_id,external_email_id,thread_id,received_at")
+        .in("email_id", emailIds);
+      if (refErr) throw refErr;
+      refsById = Object.fromEntries(
+        (refData || []).map((r: any) => [r.email_id, r])
+      );
+    }
+
+    const enriched = await Promise.all(
+      events.map(async (e: any) => {
+        const ref = refsById[e.email_id as string];
+        let gmail_url: string | undefined;
+        let email_received_at: string | undefined;
+        if (ref) {
+          gmail_url = await buildGmailUrlWithPrefs(
+            ref.external_email_id,
+            ref.thread_id
+          );
+          email_received_at = ref.received_at;
+        }
+        return { ...e, gmail_url, email_received_at };
+      })
+    );
+
+    enriched.sort((a: any, b: any) => {
+      const ad = a.email_received_at || a.event_date;
+      const bd = b.email_received_at || b.event_date;
+      return new Date(ad).getTime() - new Date(bd).getTime();
+    });
+
+    return enriched as ApplicationEvent[];
+  },
+
+  async getEventsWithEmailRefsByApplicationIds(
+    applicationIds: string[]
+  ): Promise<Record<string, ApplicationEvent[]>> {
+    if (!applicationIds?.length) return {};
+    const { data, error } = await supabase
+      .from("application_events")
+      .select(`
+        *,
+        job_applications!inner(company,role)
+      `)
+      .in("application_id", applicationIds);
+
+    if (error) throw error;
+
+    const events = (data || []).map((e: any) => ({
+      ...e,
+      company: e?.company ?? e?.job_applications?.company ?? undefined,
+      role: e?.role ?? e?.job_applications?.role ?? undefined,
+    }));
+
+    const emailIds = Array.from(
+      new Set(events.map((e: any) => e.email_id).filter(Boolean))
+    ) as string[];
+
+    let refsById: Record<string, any> = {};
+    if (emailIds.length) {
+      const { data: refData, error: refErr } = await supabase
+        .from("email_refs")
+        .select("email_id,external_email_id,thread_id,received_at")
+        .in("email_id", emailIds);
+      if (refErr) throw refErr;
+      refsById = Object.fromEntries(
+        (refData || []).map((r: any) => [r.email_id, r])
+      );
+    }
+
+    const enriched = await Promise.all(
+      events.map(async (e: any) => {
+        const ref = refsById[e.email_id as string];
+        let gmail_url: string | undefined;
+        let email_received_at: string | undefined;
+        if (ref) {
+          gmail_url = await buildGmailUrlWithPrefs(
+            ref.external_email_id,
+            ref.thread_id
+          );
+          email_received_at = ref.received_at;
+        }
+        return { ...e, gmail_url, email_received_at };
+      })
+    );
+
+    const grouped: Record<string, ApplicationEvent[]> = {};
+    for (const e of enriched as any[]) {
+      const appId = e.application_id as string;
+      if (!grouped[appId]) grouped[appId] = [];
+      grouped[appId].push(e);
+    }
+    for (const appId of Object.keys(grouped)) {
+      grouped[appId].sort((a: any, b: any) => {
+        const ad = a.email_received_at || a.event_date;
+        const bd = b.email_received_at || b.event_date;
+        return new Date(ad).getTime() - new Date(bd).getTime();
+      });
+    }
+    return grouped;
+  },
 };
 
 export const emailsService = {
@@ -215,12 +342,13 @@ export const emailsService = {
     const { data, error } = await supabase
       .from("emails")
       .update(updates)
-      .eq("id", id)
+      .eq("application_id", id)
+      .eq("user_id", userId)
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+    return { ...(data as any), id: (data as any).application_id } as any;
   },
 
   async markEmailAsParsed(
@@ -256,14 +384,16 @@ export const buildGmailUrl = (
 };
 
 export const emailRefsService = {
-  async getRefsByApplicationId(applicationId: string): Promise<EmailRef[]> {
+  async getRefsByApplicationId(applicationId?: string): Promise<EmailRef[]> {
     const userId = await getCurrentUserId();
-    const { data, error } = await supabase
+    let query = supabase
       .from("email_refs")
       .select("*")
-      .eq("user_id", userId)
-      .eq("application_id", applicationId)
-      .order("received_at", { ascending: false });
+      .eq("user_id", userId);
+    if (applicationId) {
+      query = query.eq("application_id", applicationId);
+    }
+    const { data, error } = await query.order("received_at", { ascending: false });
 
     if (error) throw error;
     const list = (data || []) as any[];
@@ -274,8 +404,9 @@ export const emailRefsService = {
   },
 
   async getLatestRefByApplicationId(
-    applicationId: string
+    applicationId?: string
   ): Promise<EmailRef | null> {
+    if (!applicationId) return null;
     const refs = await this.getRefsByApplicationId(applicationId);
     return refs[0] || null;
   },

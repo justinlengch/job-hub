@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TimelineEvent as TimelineEventType } from "@/types/application";
-import { Calendar, Building2 } from "lucide-react";
+import { Calendar, Building2, ExternalLink } from "lucide-react";
 
 interface TimelineEventProps {
   event: TimelineEventType;
@@ -53,9 +53,23 @@ const TimelineEventComponent = ({ event }: TimelineEventProps) => {
           </p>
           <p className="text-sm">{event.description}</p>
         </div>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Calendar className="h-3 w-3" />
-          <span>{new Date(event.event_date).toLocaleDateString()}</span>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            <span>{new Date(event.email_received_at || event.event_date).toLocaleDateString()}</span>
+          </div>
+          {event.gmail_url && (
+            <a
+              href={event.gmail_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline inline-flex items-center gap-1"
+              title="Open original email in Gmail"
+            >
+              View email
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
         </div>
       </div>
     </Card>
