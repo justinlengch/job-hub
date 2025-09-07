@@ -8,6 +8,7 @@ import FilterControls from "@/components/FilterControls";
 import StatsChart from "@/components/StatsChart";
 import Navigation from "@/components/Navigation";
 import { GmailSetupButton } from "@/components/GmailSetupButton";
+import { useGmailAutomation } from "@/hooks/useGmailAutomation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   FileText,
@@ -34,6 +35,7 @@ const Dashboard = () => {
     loading: eventsLoading,
     error: eventsError,
   } = useApplicationEvents();
+  const { isEnabled } = useGmailAutomation();
 
   // Show loading state
   if (appsLoading || eventsLoading) {
@@ -145,10 +147,12 @@ const Dashboard = () => {
           <StatsChart statusCounts={statusCounts} />
         </div>
 
-        {/* Gmail Integration Section */}
-        <div className="mb-8">
-          <GmailSetupButton />
-        </div>
+        {/* Gmail Integration Section (only show if not enabled) */}
+        {!isEnabled && (
+          <div className="mb-8">
+            <GmailSetupButton />
+          </div>
+        )}
 
         {/* Filter Controls */}
         <div className="mb-6">

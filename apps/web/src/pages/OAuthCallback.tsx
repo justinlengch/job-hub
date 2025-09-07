@@ -98,14 +98,11 @@ export default function OAuthCallback() {
           return;
         }
 
-        // Best-effort parse; backend might 302 in a browser-initiated flow
-        // but fetch won't navigate. That's okay—we navigate client-side below.
         await resp
           .clone()
           .json()
           .catch(() => null);
 
-        // Clean up the URL to remove code/state from the address bar
         try {
           window.history.replaceState(
             {},
@@ -138,7 +135,6 @@ export default function OAuthCallback() {
     };
 
     run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
