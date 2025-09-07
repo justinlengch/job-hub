@@ -60,9 +60,9 @@ const StatsChart = ({ statusCounts }: StatsChartProps) => {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={barData}>
+            <BarChart data={barData} margin={{ bottom: 48 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
+              <XAxis dataKey="name" interval={0} tick={{ angle: -30, textAnchor: 'end' }} tickMargin={16} height={70} />
               <YAxis />
               <Tooltip />
               <Bar dataKey="value" fill="#8884d8">

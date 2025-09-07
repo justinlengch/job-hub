@@ -18,6 +18,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import TimelineEventComponent from "@/components/TimelineEvent";
 
 interface ApplicationsTableProps {
@@ -267,9 +268,19 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
               {/* Notes */}
               <div className="space-y-2">
                 {application.notes && (
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {application.notes}
-                  </p>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <p
+                        className="text-sm text-muted-foreground line-clamp-4 whitespace-pre-wrap"
+                        title={application.notes}
+                      >
+                        {application.notes}
+                      </p>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="max-w-[28rem] md:max-w-[32rem] break-words whitespace-pre-wrap">
+                      {application.notes}
+                    </HoverCardContent>
+                  </HoverCard>
                 )}
               </div>
             </div>
