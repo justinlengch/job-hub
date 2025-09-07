@@ -157,7 +157,7 @@ class GmailService(BaseService):
             filter_criteria = {
                 "query": (
                     "(category:primary OR from:(@linkedin.com @indeed.com)) AND ("
-                    'subject:("application received" OR "thank you for applying" OR '
+                    'subject:("application received" OR "thank you for applying" OR "applying" OR '
                     '"your application to" OR "application submitted" OR '
                     '"interview invitation" OR "interview scheduled" OR "interview" OR '
                     '"software" OR "technical interview" OR "developer" OR "engineer" OR "backend" OR '
