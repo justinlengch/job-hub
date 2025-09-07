@@ -47,7 +47,7 @@ export default function OAuthCallback() {
   const code = currentUrl.searchParams.get("code");
   const state = currentUrl.searchParams.get("state");
   const successUrlFromState = useMemo(() => parseSuccessUrlFromState(state), [state]);
-  const defaultSuccessPath = "/settings/integrations";
+  const defaultSuccessPath = "/settings";
 
   useEffect(() => {
     const run = async () => {
@@ -117,11 +117,18 @@ export default function OAuthCallback() {
         }
 
         // Prefer success_url from state if it matches the frontend origin
-        const target =
-          successUrlFromState &&
-          successUrlFromState.startsWith(window.location.origin)
-            ? successUrlFromState.replace(window.location.origin, "")
-            : defaultSuccessPath;
+        const target = (() => {
+          if (successUrlFromState && successUrlFromState.startsWith(window.location.origin)) {
+            try {
+              const u = new URL(successUrlFromState);
+              return u.pathname + u.search + u.hash;
+            } catch {
+              // Fallback to stripping origin
+              return successUrlFromState.replace(window.location.origin, "");
+            }
+          }
+          return defaultSuccessPath;
+        })();
 
         setMessage("Linked successfully. Redirecting…");
         navigate(target, { replace: true });

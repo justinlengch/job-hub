@@ -31,7 +31,7 @@ export const GmailSetupButton = () => {
       const API_BASE_URL = import.meta.env.VITE_API_URL;
 
       const redirectUri = `${window.location.origin}/oauth/google/callback`;
-      const successUrl = `${window.location.origin}/settings/integrations`;
+      const successUrl = window.location.href;
 
       const startUrl = new URL(`${API_BASE_URL}/api/auth/google/start`);
       startUrl.searchParams.set("redirect_uri", redirectUri);
