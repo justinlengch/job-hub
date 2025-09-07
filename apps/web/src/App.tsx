@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Spreadsheet from "./pages/Spreadsheet";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import OAuthCallback from "./pages/OAuthCallback";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +37,7 @@ const AuthenticatedApp = () => {
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/dashboard/spreadsheet" element={<Spreadsheet />} />
       <Route path="/settings" element={<Settings />} />
+      <Route path="/oauth/google/callback" element={<OAuthCallback />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
