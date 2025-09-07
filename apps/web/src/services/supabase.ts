@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { JobApplication, ApplicationEvent, Email } from "@/types/application";
+import { JobApplication, ApplicationEvent, Email, EmailRef } from "@/types/application";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
@@ -242,4 +242,113 @@ export const emailsService = {
     if (error) throw error;
     return data;
   },
+};
+
+export const buildGmailUrl = (
+  externalEmailId?: string,
+  threadId?: string,
+  accountIndex: number = 0
+): string => {
+  const anchor = threadId || externalEmailId;
+  return anchor
+    ? `https://mail.google.com/mail/u/${accountIndex}/#all/${anchor}`
+    : `https://mail.google.com/mail/u/${accountIndex}/#inbox`;
+};
+
+export const emailRefsService = {
+  async getRefsByApplicationId(applicationId: string): Promise<EmailRef[]> {
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from("email_refs")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("application_id", applicationId)
+      .order("received_at", { ascending: false });
+
+    if (error) throw error;
+    const list = (data || []) as any[];
+    return list.map((row) => ({
+      ...row,
+      gmail_url: buildGmailUrl(row.external_email_id, row.thread_id),
+    }));
+  },
+
+  async getLatestRefByApplicationId(
+    applicationId: string
+  ): Promise<EmailRef | null> {
+    const refs = await this.getRefsByApplicationId(applicationId);
+    return refs[0] || null;
+  },
+
+  async getRefsForUser(userId?: string): Promise<EmailRef[]> {
+    const currentUserId = await getCurrentUserId();
+    const targetUserId = userId || currentUserId;
+    const { data, error } = await supabase
+      .from("email_refs")
+      .select("*")
+      .eq("user_id", targetUserId)
+      .order("received_at", { ascending: false });
+
+    if (error) throw error;
+    const list = (data || []) as any[];
+    return list.map((row) => ({
+      ...row,
+      gmail_url: buildGmailUrl(row.external_email_id, row.thread_id),
+    }));
+  },
+};
+
+export const userPreferencesService = {
+  async getPreferences(userId?: string): Promise<{ user_id: string; gmail_email: string } | null> {
+    const currentUserId = await getCurrentUserId();
+    const targetUserId = userId || currentUserId;
+
+    const { data, error } = await supabase
+      .from("user_preferences")
+      .select("user_id,gmail_email")
+      .eq("user_id", targetUserId)
+      .limit(1);
+
+    if (error) throw error;
+    const row = (data || [])[0];
+    return row || null;
+  },
+
+  getGmailAccountIndexFromPreferences(
+    prefs: { gmail_email?: string } | null,
+    fallbackIndex: number = 0
+  ): number {
+    try {
+      if (typeof window === "undefined" || !prefs?.gmail_email) return fallbackIndex;
+      const key = `gmailAccountIndex:${prefs.gmail_email}`;
+      const raw = window.localStorage.getItem(key);
+      const idx = raw ? parseInt(raw, 10) : NaN;
+      return Number.isFinite(idx) && idx >= 0 ? idx : fallbackIndex;
+    } catch {
+      return fallbackIndex;
+    }
+  },
+
+  async getGmailAccountIndexForUser(userId?: string, fallbackIndex: number = 0): Promise<number> {
+    const prefs = await this.getPreferences(userId);
+    return this.getGmailAccountIndexFromPreferences(prefs, fallbackIndex);
+  },
+};
+
+export const buildGmailUrlWithPrefs = async (
+  externalEmailId?: string,
+  threadId?: string,
+  userId?: string
+): Promise<string> => {
+  const prefs = await userPreferencesService.getPreferences(userId);
+  const anchor = threadId || externalEmailId;
+  const base = "https://mail.google.com/mail/";
+  if (anchor && prefs?.gmail_email) {
+    const email = encodeURIComponent(prefs.gmail_email);
+    return `${base}?authuser=${email}#all/${anchor}`;
+  }
+  if (anchor) {
+    return `${base}#all/${anchor}`;
+  }
+  return `${base}#inbox`;
 };

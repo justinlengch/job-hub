@@ -70,6 +70,19 @@ export interface Email {
   created_at: string;
 }
 
+export interface EmailRef {
+  id: string;
+  user_id: string;
+  application_id?: string;
+  email_id: string;
+  external_email_id: string;
+  thread_id?: string;
+  history_id?: number;
+  received_at: string;
+  created_at: string;
+  gmail_url?: string;
+}
+
 export interface StatusCounts {
   APPLIED: number;
   ASSESSMENT: number;
@@ -110,4 +123,9 @@ export interface EmailParseResponse {
   salary_range?: string;
   notes?: string;
   confidence_score: number;
+}
+
+export interface UserPreferences {
+  user_id: string;
+  gmail_email: string;
 }

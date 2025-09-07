@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { JobApplication } from "@/types/application";
+import { emailRefsService, buildGmailUrlWithPrefs } from "@/services/supabase";
 import {
   Search,
   Download,
@@ -14,6 +15,7 @@ import {
   MapPin,
   DollarSign,
   Calendar,
+  ExternalLink,
 } from "lucide-react";
 
 interface ApplicationsTableProps {
@@ -36,6 +38,7 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
     useState<keyof JobApplication>("created_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
+  const [gmailLinks, setGmailLinks] = useState<Record<string, string>>({});
   const itemsPerPage = 10;
 
   // Filter applications based on search term
@@ -63,6 +66,52 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
     startIndex,
     startIndex + itemsPerPage
   );
+
+  // Fetch latest Gmail links for the currently visible applications
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const entries = await Promise.all(
+          paginatedApplications.map(async (application) => {
+            try {
+              const ref = await emailRefsService.getLatestRefByApplicationId(
+                application.id
+              );
+              let url = "";
+              if (ref) {
+                url = await buildGmailUrlWithPrefs(ref.external_email_id, ref.thread_id);
+              }
+              return [application.id, url] as const;
+            } catch {
+              return [application.id, ""] as const;
+            }
+          })
+        );
+
+        if (!cancelled) {
+          setGmailLinks((prev) => {
+            const next = { ...prev };
+            for (const [id, url] of entries) {
+              if (url) next[id] = url;
+            }
+            return next;
+          });
+        }
+      } catch {
+        // no-op
+      }
+    };
+
+    if (paginatedApplications.length) {
+      run();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [paginatedApplications]);
 
   const handleSort = (field: keyof JobApplication) => {
     if (sortField === field) {
@@ -177,6 +226,17 @@ const ApplicationsTable = ({ applications }: ApplicationsTableProps) => {
                     {new Date(application.created_at).toLocaleDateString()}
                   </span>
                 </div>
+                {gmailLinks[application.id] && (
+                  <a
+                    href={gmailLinks[application.id]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    View email
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
               </div>
 
               {/* Notes */}
