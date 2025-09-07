@@ -158,7 +158,7 @@ class GmailService(BaseService):
                 "query": (
                     "(category:primary OR from:(@linkedin.com @indeed.com)) AND ("
                     'subject:("application received" OR "thank you for applying" OR "applying" OR '
-                    '"your application to" OR "application submitted" OR '
+                    '"your application to" OR "application submitted" OR "application" OR'
                     '"interview invitation" OR "interview scheduled" OR "interview" OR '
                     '"software" OR "technical interview" OR "developer" OR "engineer" OR "backend" OR '
                     '"schedule interview" OR "assessment" OR "assessment invite" OR '
