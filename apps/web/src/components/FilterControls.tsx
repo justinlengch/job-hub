@@ -4,16 +4,16 @@ import { Badge } from "@/components/ui/badge";
 import { JobApplication } from "@/types/application";
 
 interface FilterControlsProps {
-  selectedStatus: JobApplication['status'] | 'all';
-  onStatusChange: (status: JobApplication['status'] | 'all') => void;
+  selectedStatus: JobApplication['status'] | 'all' | 'in-progress';
+  onStatusChange: (status: JobApplication['status'] | 'all' | 'in-progress') => void;
 }
 
 const statusOptions: { value: JobApplication['status'] | 'all'; label: string; count?: number }[] = [
   { value: 'all', label: 'All Applications' },
-  { value: 'applied', label: 'Applied' },
+  { value: 'APPLIED', label: 'Applied' },
   { value: 'in-progress', label: 'In Progress' },
-  { value: 'offer', label: 'Offers' },
-  { value: 'rejected', label: 'Rejected' }
+  { value: 'OFFERED', label: 'Offers' },
+  { value: 'REJECTED', label: 'Rejected' }
 ];
 
 const FilterControls = ({ selectedStatus, onStatusChange }: FilterControlsProps) => {

@@ -21,7 +21,7 @@ import {
 
 const Dashboard = () => {
   const [selectedStatus, setSelectedStatus] = useState<
-    JobApplication["status"] | "all"
+    JobApplication["status"] | "all" | "in-progress"
   >("all");
 
   // Fetch real data from Supabase
@@ -86,7 +86,21 @@ const Dashboard = () => {
       ? timelineEvents
       : timelineEvents.filter((event) => {
           const app = applications.find((a) => a.id === event.application_id);
-          return app?.status === selectedStatus;
+          if (!app) return false;
+
+          // In-progress = not in rejected/applied/submitted/withdrawn/offered
+          // (We don't have SUBMITTED as a separate status; APPLIED covers that)
+          if (selectedStatus === "in-progress") {
+            const excluded: JobApplication["status"][] = [
+              "REJECTED",
+              "APPLIED",
+              "WITHDRAWN",
+              "OFFERED",
+            ];
+            return !excluded.includes(app.status);
+          }
+
+          return app.status === selectedStatus;
         });
 
   return (

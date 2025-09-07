@@ -6,7 +6,7 @@ If a field cannot be extracted, use null.
 ===== ENUMS =====
 INTENT: NEW_APPLICATION | APPLICATION_EVENT | GENERAL
 STATUS: APPLIED | ASSESSMENT | INTERVIEW | REJECTED | OFFERED | ACCEPTED | WITHDRAWN
-EVENT_TYPE: APPLICATION_SUBMITTED | APPLICATION_VIEWED | APPLICATION_REVIEWED | ASSESSMENT_RECEIVED | ASSESSMENT_COMPLETED | INTERVIEW_SCHEDULED | INTERVIEW_COMPLETED | REFERENCE_REQUESTED | OFFER_RECEIVED | OFFER_ACCEPTED | OFFER_DECLINED | APPLICATION_REJECTED | APPLICATION_WITHDRAWN
+EVENT_TYPE: APPLICATION_RECEIVED | APPLICATION_VIEWED | APPLICATION_REVIEWED | ASSESSMENT_RECEIVED | ASSESSMENT_COMPLETED | INTERVIEW_SCHEDULED | INTERVIEW_COMPLETED | REFERENCE_REQUESTED | OFFER_RECEIVED | OFFER_ACCEPTED | OFFER_DECLINED | APPLICATION_REJECTED | APPLICATION_WITHDRAWN
 =================
 
 SCHEMA:
@@ -38,7 +38,7 @@ RULES:
   - Precedence: if any assessment is referenced, choose ASSESSMENT even if the email also says "thank you for applying".
   - Default: if no status cues exist, use APPLIED.
 - event_type: Set only when intent is APPLICATION_EVENT. Map using these examples:
-  - APPLICATION_SUBMITTED: confirmation that your application was submitted/received (use for follow-ups beyond the initial APPLIED acknowledgement).
+  - APPLICATION_RECEIVED: confirmation that your application was submitted/received (use for follow-ups beyond the initial APPLIED acknowledgement).
   - APPLICATION_VIEWED: employer viewed/opened your application/profile.
   - APPLICATION_REVIEWED: application moved to review; "under review", "screening", "shortlisted".
   - ASSESSMENT_RECEIVED: invitation/links/instructions to complete an assessment or assignment.
