@@ -48,7 +48,7 @@ class GmailHistoryService(BaseService):
 
                 for hist in response.get("history", []):
                     hist_id = hist.get("id")
-                    if hist_id and hist_id > latest_history_id:
+                    if hist_id and int(str(hist_id)) > int(str(latest_history_id)):
                         latest_history_id = hist_id
 
                     # messagesAdded entries contain new messages
@@ -61,7 +61,7 @@ class GmailHistoryService(BaseService):
                                 refs[mid] = {
                                     "messageId": mid,
                                     "threadId": msg.get("threadId"),
-                                    "historyId": hist_id,
+                                    "historyId": str(hist_id),
                                 }
 
                     # labelAdded events may add the label after initial receipt
@@ -74,7 +74,7 @@ class GmailHistoryService(BaseService):
                                 refs[mid] = {
                                     "messageId": mid,
                                     "threadId": msg.get("threadId"),
-                                    "historyId": hist_id,
+                                    "historyId": str(hist_id),
                                 }
 
                 page_token = response.get("nextPageToken")

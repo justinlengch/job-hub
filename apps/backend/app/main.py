@@ -60,7 +60,19 @@ async def _refresh_gmail_watches_once():
         rows = resp.data or []
         for row in rows:
             label_id = row.get("gmail_label_id")
-            exp_ms = row.get("gmail_watch_expiration")
+            exp_raw = row.get("gmail_watch_expiration")
+            # Normalize expiration to milliseconds since epoch (int)
+            exp_ms = None
+            if isinstance(exp_raw, (int, float)):
+                exp_ms = int(exp_raw)
+            elif isinstance(exp_raw, str) and exp_raw:
+                try:
+                    from datetime import datetime
+
+                    dt = datetime.fromisoformat(exp_raw)
+                    exp_ms = int(dt.timestamp() * 1000)
+                except Exception:
+                    exp_ms = None
             cipher_b64 = row.get("gmail_refresh_cipher_b64")
             nonce_b64 = row.get("gmail_refresh_nonce_b64")
             if not label_id or not cipher_b64 or not nonce_b64:
