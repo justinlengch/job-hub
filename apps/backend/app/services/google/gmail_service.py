@@ -143,20 +143,28 @@ class GmailService(BaseService):
             for existing_filter in existing_filters:
                 action = existing_filter.get("action", {})
                 if label_id in action.get("addLabelIds", []):
-                    self._log_operation(
-                        "filter already exists",
-                        f"Found existing filter for label ID: {label_id}",
+                    # Compare criteria; if different, replace the filter
+                    existing_query = (existing_filter.get("criteria") or {}).get(
+                        "query"
                     )
-                    return True
+                    desired_query = (
+                        None  # will be set below once filter_criteria is defined
+                    )
+                    # Defer immediate return; if criteria differ we will delete and recreate
+                    filter_to_replace = existing_filter.get("id")
+                    break
 
             filter_criteria = {
                 "query": (
                     "(category:primary OR from:(@linkedin.com @indeed.com)) AND ("
                     'subject:("application received" OR "thank you for applying" OR '
                     '"your application to" OR "application submitted" OR '
-                    '"interview invitation" OR "interview scheduled" OR '
-                    '"schedule interview" OR "online assessment" OR '
-                    '"coding assessment" OR "take-home assignment" OR '
+                    '"interview invitation" OR "interview scheduled" OR "interview" OR '
+                    '"software" OR "technical interview" OR "developer" OR "engineer" OR "backend" OR '
+                    '"schedule interview" OR "assessment" OR "assessment invite" OR '
+                    '"assessment requested" OR "assessment instructions" OR '
+                    '"online assessment" OR "coding assessment" OR "coding test" OR '
+                    '"technical test" OR "take-home assignment" OR "challenge" OR "assignment" OR '
                     '"offer letter" OR "job offer" OR '
                     '"regret to inform" OR "application status" OR '
                     '"decision on your application") '
@@ -167,6 +175,25 @@ class GmailService(BaseService):
                     '-subject:(sale OR discount OR "% off" OR "free shipping" OR newsletter OR digest OR webinar OR promo OR event)'
                 )
             }
+            # If an existing filter for this label was found, decide whether to keep or replace it
+            try:
+                if "filter_to_replace" in locals():
+                    desired_query = filter_criteria["query"]
+                    if (
+                        existing_query
+                        and existing_query.strip() == desired_query.strip()
+                    ):
+                        self._log_operation(
+                            "filter already exists",
+                            f"Using existing filter for label ID: {label_id}",
+                        )
+                        return True
+                    # Criteria changed — replace existing filter
+                    if filter_to_replace:
+                        self.delete_filter(filter_to_replace)
+            except Exception:
+                # Best-effort replacement; continue to (re)create below
+                pass
 
             filter_action = {
                 "addLabelIds": [label_id],
