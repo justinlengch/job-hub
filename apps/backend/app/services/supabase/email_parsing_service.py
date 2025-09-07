@@ -149,38 +149,98 @@ async def parse_and_persist(ref: dict, user_id: str, gmail_client) -> dict:
     except Exception:
         received_at_dt = None
 
-    def _collect_text(part) -> str:
-        if not part:
+    # Helpers localized to avoid global deps
+    import base64
+    import re
+
+    from bs4 import BeautifulSoup
+
+    def _b64url_decode(data: str) -> str:
+        if not data:
             return ""
-        text = ""
-        body = part.get("body", {})
+        try:
+            padding = "=" * (-len(data) % 4)
+            return base64.urlsafe_b64decode((data + padding).encode("utf-8")).decode(
+                "utf-8", errors="ignore"
+            )
+        except Exception:
+            return ""
+
+    def _walk_collect(part: dict, plain: list[str], html: list[str]) -> None:
+        if not part:
+            return
+        mime = (part.get("mimeType") or "").lower()
+        body = part.get("body") or {}
         data = body.get("data")
         if data:
-            import base64
+            decoded = _b64url_decode(data)
+            if "text/plain" in mime:
+                plain.append(decoded)
+            elif "text/html" in mime:
+                html.append(decoded)
+        for sub in part.get("parts") or []:
+            _walk_collect(sub, plain, html)
 
-            try:
-                decoded = base64.urlsafe_b64decode(data).decode(
-                    "utf-8", errors="ignore"
-                )
-                # Use only plain text parts preferentially; fallback accumulates all
-                if "plain" in part.get("mimeType", ""):
-                    text += decoded
-                else:
-                    text += ("\n" + decoded) if text else decoded
-            except Exception:
-                pass
-        for sub in part.get("parts", []) or []:
-            sub_text = _collect_text(sub)
-            if sub_text:
-                text += ("\n" + sub_text) if text else sub_text
+    def _parse_html(html_text: str) -> tuple[str, str]:
+        if not html_text:
+            return "", ""
+        soup = BeautifulSoup(html_text, "lxml")
+        for tag in soup(["script", "style", "noscript", "template", "head"]):
+            tag.decompose()
+        # Use BeautifulSoup to get readable text and cleaned HTML
+        text = soup.get_text(separator="\n", strip=True)
+        text = re.sub(r"[ \t\x0b\f\r]+", " ", text)
+        text = re.sub(r"\n\s*\n\s*", "\n\n", text).strip()
+        cleaned_html = str(soup)
+        return text, cleaned_html
+
+    def _html_to_text(html_text: str) -> str:
+        """Deprecated shim: uses BeautifulSoup via _parse_html"""
+        if not html_text:
+            return ""
+        text, _ = _parse_html(html_text)
         return text
 
-    body_text = _collect_text(payload).strip()
+    # padding
+    # padding
+    # padding
+    # padding
+    # padding
+
+    def _truncate(s: str, limit: int = 20000) -> str:
+        if s and len(s) > limit:
+            return s[:limit] + "\n...[truncated]..."
+        return s
+
+    # Collect plain-text and HTML parts recursively
+    plain_parts: list[str] = []
+    html_parts: list[str] = []
+    _walk_collect(payload, plain_parts, html_parts)
+
+    body_html_raw = "\n".join([p for p in html_parts if p]).strip()
+    html_text_from_html, cleaned_html = (
+        _parse_html(body_html_raw) if body_html_raw else ("", "")
+    )
+    body_html_clean = _truncate(cleaned_html) if cleaned_html else ""
+
+    # Choose the larger between plain text and HTML-derived text
+    candidate_plain = (
+        "\n".join([p for p in plain_parts if p]).strip() if plain_parts else ""
+    )
+    candidate_html = html_text_from_html.strip() if html_text_from_html else ""
+    if len(candidate_html) > len(candidate_plain):
+        body_text = candidate_html
+    elif candidate_plain:
+        body_text = candidate_plain
+    else:
+        # Fallback: attempt to decode whatever is in the payload body
+        decoded = _b64url_decode((payload.get("body") or {}).get("data", ""))
+        body_text = decoded.strip()
 
     email_input = LLMEmailInput(
         subject=subject,
         body_text=body_text or "(empty)",
-        body_html=None,
+        body_html=body_html_clean or None,
     )
     parsed = await extract_job_info(email_input)
 
@@ -191,7 +251,7 @@ async def parse_and_persist(ref: dict, user_id: str, gmail_client) -> dict:
         sender=sender,
         subject=subject,
         body_text=body_text,
-        body_html=None,
+        body_html=body_html_clean or None,
         received_at=received_at_dt,
         thread_id=ref.get("threadId"),
         history_id=ref.get("historyId"),

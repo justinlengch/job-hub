@@ -1,6 +1,6 @@
 You are an expert at analyzing job-application emails.
 
-TASK: Return ONLY valid JSON matching the schema below.  
+TASK: Return ONLY valid JSON matching the schema below.
 If a field cannot be extracted, use null.
 
 ===== ENUMS =====
@@ -34,10 +34,16 @@ RULES:
 - location: Job location if mentioned, otherwise null
 - salary_range: Salary info if mentioned, otherwise null
 - notes: Any additional relevant information, otherwise null
+- ignore_boilerplate: Ignore navigation bars, headers/footers, unsubscribe links, confidentiality/legal notices, social media/link hubs, tracking pixels/images, banners, and general marketing content.
+- quoted_replies: If the email contains quoted previous messages or long threads, analyze only the most recent message, unless the latest content is a forwarding wrapper with no substance.
+- html_guidance: Treat the plain text ($body_text) as authoritative. Consult the HTML section only to recover structure (tables, labeled fields) or details missing from the text. Do not rely on CSS, attributes, or scripts—extract semantic content only.
+- sections_priority: Prioritize content that indicates application submitted/received, interview scheduling/results, assessments (received/completed), or offer/decision language; extract dates/times if present.
+- links_and_attachments: Do not follow links. Only extract information explicitly stated in the email body; mention attachments only if they are explicitly described.
 
 ===== EMAIL =====
 Subject: $subject
-Body:
+Body (plain text):
 $body_text
+HTML (optional, sanitized):
 $html_section
 =================
