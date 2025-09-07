@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Table, XCircle } from "lucide-react";
+import { Table, XCircle, Plus, Download } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { ApplicationStatus } from "@/types/application";
+import { ApplicationStatus, JobApplication } from "@/types/application";
 
 const Spreadsheet = () => {
   const { applications, loading, error, deleteApplication, createApplication } = useApplications();
@@ -103,7 +103,7 @@ const Spreadsheet = () => {
                     job_posting_url: form.job_posting_url || undefined,
                     notes: form.notes || undefined,
                     applied_date: form.applied_date ? form.applied_date.toISOString() : undefined,
-                  } as any;
+                  } as unknown as Omit<JobApplication, "id" | "created_at" | "last_updated_at" | "user_id">;
                   await createApplication(payload);
                   setOpen(false);
                   setForm({
@@ -226,10 +226,56 @@ const Spreadsheet = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>All Applications ({applications.length})</CardTitle>
-            <Button onClick={() => setOpen(true)}>New Application</Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" className="flex items-center gap-2" onClick={() => setOpen(true)}>
+                <Plus className="h-4 w-4" />
+                New Application
+              </Button>
+              <Button
+                variant="outline"
+                className="flex items-center gap-2"
+                onClick={() => {
+                  const headers = [
+                    "Company",
+                    "Role",
+                    "Status",
+                    "Date Created",
+                    "Last Update",
+                    "Location",
+                    "Salary Range",
+                  ];
+                  const csvContent = [
+                    headers.join(","),
+                    ...applications.map((app) =>
+                      [
+                        app.company,
+                        app.role,
+                        app.status,
+                        app.created_at,
+                        app.last_updated_at,
+                        app.location || "",
+                        app.salary_range || "",
+                      ]
+                        .map((field) => `"${field}"`)
+                        .join(",")
+                    ),
+                  ].join("\n");
+                  const blob = new Blob([csvContent], { type: "text/csv" });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "job-applications.csv";
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                }}
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            <ApplicationsTable applications={applications} onDelete={deleteApplication} />
+            <ApplicationsTable applications={applications} onDelete={deleteApplication} hideExport />
           </CardContent>
         </Card>
       </main>

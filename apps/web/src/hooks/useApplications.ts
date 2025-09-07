@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { jobApplicationsService } from "@/services/supabase";
+import { useState, useEffect, useCallback } from "react";
+import { jobApplicationsService, supabase } from "@/services/supabase";
 import { JobApplication } from "@/types/application";
 
 export const useApplications = (userId?: string) => {
@@ -7,7 +7,7 @@ export const useApplications = (userId?: string) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchApplications = async () => {
+  const fetchApplications = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -27,11 +27,11 @@ export const useApplications = (userId?: string) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
     fetchApplications();
-  }, [userId]);
+  }, [fetchApplications]);
 
   const updateApplication = async (
     id: string,
@@ -57,7 +57,17 @@ export const useApplications = (userId?: string) => {
     application: Omit<JobApplication, "id" | "created_at" | "last_updated_at" | "user_id">
   ): Promise<JobApplication> => {
     try {
-      const created = await jobApplicationsService.createApplication(application as any);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.id) {
+        throw new Error("User not authenticated");
+      }
+      const payload: Omit<JobApplication, "id" | "created_at" | "last_updated_at"> = {
+        ...application,
+        user_id: user.id,
+      };
+      const created = await jobApplicationsService.createApplication(payload);
       setApplications((prev) => [created, ...prev]);
       return created;
     } catch (err) {

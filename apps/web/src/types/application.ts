@@ -34,6 +34,7 @@ export interface JobApplication {
   salary_range?: string;
   notes?: string;
   created_at: string;
+  applied_date?: string;
   last_updated_at: string;
   last_email_received_at?: string;
 }

@@ -24,7 +24,17 @@ export const jobApplicationsService = {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return (data || []).map((row: any) => ({ ...row, id: row.application_id }));
+    type DbJobApplication = Omit<JobApplication, "id" | "created_at"> & {
+      application_id: string;
+      created_at: string;
+      applied_date?: string;
+    };
+    const rows = (data ?? []) as DbJobApplication[];
+    return rows.map((row) => ({
+      ...row,
+      created_at: row.applied_date ?? row.created_at,
+      id: row.application_id,
+    }));
   },
 
   async getApplicationById(id: string): Promise<JobApplication | null> {
@@ -37,7 +47,21 @@ export const jobApplicationsService = {
       .single();
 
     if (error) throw error;
-    return data;
+    if (!data) return null;
+    {
+      type DbJobApplication = Omit<JobApplication, "id" | "created_at"> & {
+        application_id: string;
+        created_at: string;
+        applied_date?: string;
+      };
+      const row = data as unknown as DbJobApplication;
+      const shaped: JobApplication = {
+        ...(row as Omit<JobApplication, "id" | "created_at">),
+        id: row.application_id,
+        created_at: row.applied_date ?? row.created_at,
+      };
+      return shaped;
+    }
   },
 
   async updateApplication(
@@ -54,7 +78,21 @@ export const jobApplicationsService = {
       .single();
 
     if (error) throw error;
-    return data ? ({ ...(data as any), id: (data as any).application_id } as any) : null;
+    if (!data) return null;
+    {
+      type DbJobApplication = Omit<JobApplication, "id" | "created_at"> & {
+        application_id: string;
+        created_at: string;
+        applied_date?: string;
+      };
+      const row = data as unknown as DbJobApplication;
+      const shaped: JobApplication = {
+        ...(row as Omit<JobApplication, "id" | "created_at">),
+        id: row.application_id,
+        created_at: row.applied_date ?? row.created_at,
+      };
+      return shaped;
+    }
   },
 
   async deleteApplication(id: string): Promise<void> {
@@ -77,7 +115,17 @@ export const jobApplicationsService = {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return (data || []).map((row: any) => ({ ...row, id: row.application_id }));
+    type DbJobApplication = Omit<JobApplication, "id" | "created_at"> & {
+      application_id: string;
+      created_at: string;
+      applied_date?: string;
+    };
+    const rows = (data ?? []) as DbJobApplication[];
+    return rows.map((row) => ({
+      ...row,
+      created_at: row.applied_date ?? row.created_at,
+      id: row.application_id,
+    }));
   },
 
   async createApplication(
@@ -94,7 +142,20 @@ export const jobApplicationsService = {
       .single();
 
     if (error) throw error;
-    return { ...(data as any), id: (data as any).application_id } as any;
+    {
+      type DbJobApplication = Omit<JobApplication, "id" | "created_at"> & {
+        application_id: string;
+        created_at: string;
+        applied_date?: string;
+      };
+      const row = data as unknown as DbJobApplication;
+      const shaped: JobApplication = {
+        ...(row as Omit<JobApplication, "id" | "created_at">),
+        id: row.application_id,
+        created_at: row.applied_date ?? row.created_at,
+      };
+      return shaped;
+    }
   },
 };
 
@@ -339,6 +400,7 @@ export const emailsService = {
   },
 
   async updateEmail(id: string, updates: Partial<Email>): Promise<Email> {
+    const userId = await getCurrentUserId();
     const { data, error } = await supabase
       .from("emails")
       .update(updates)

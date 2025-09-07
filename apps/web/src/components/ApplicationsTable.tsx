@@ -26,6 +26,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 interface ApplicationsTableProps {
   applications: JobApplication[];
   onDelete?: (id: string) => void;
+  hideExport?: boolean;
 }
 
 const statusColors = {
@@ -38,7 +39,7 @@ const statusColors = {
   WITHDRAWN: "bg-gray-100 text-gray-800",
 };
 
-const ApplicationsTable = ({ applications, onDelete }: ApplicationsTableProps) => {
+const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsTableProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] =
     useState<keyof JobApplication>("created_at");
@@ -229,10 +230,12 @@ const ApplicationsTable = ({ applications, onDelete }: ApplicationsTableProps) =
             className="pl-10"
           />
         </div>
-        <Button onClick={exportToCSV} className="flex items-center gap-2">
-          <Download className="h-4 w-4" />
-          Export CSV
-        </Button>
+        {!hideExport && (
+          <Button variant="outline" onClick={exportToCSV} className="flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+        )}
       </div>
 
       {/* Applications Grid */}
@@ -252,17 +255,18 @@ const ApplicationsTable = ({ applications, onDelete }: ApplicationsTableProps) =
               }
             >
               <Button
-                variant="destructive"
-                size="sm"
+                variant="ghost"
+                size="icon"
                 className="absolute top-3 right-3"
                 onClick={(e) => {
                   e.stopPropagation();
                   setDeleteDialogId(application.id);
                 }}
                 disabled={deletingId === application.id}
+                aria-label="Delete application"
+                title="Delete application"
               >
-                <Trash className="h-4 w-4" />
-                Delete
+                <Trash className="h-4 w-4 text-muted-foreground" />
               </Button>
               <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                 <AlertDialogHeader>
@@ -328,7 +332,7 @@ const ApplicationsTable = ({ applications, onDelete }: ApplicationsTableProps) =
                   <Calendar className="h-3 w-3 text-muted-foreground" />
                   <span>
                     Applied:{" "}
-                    {new Date(application.created_at).toLocaleDateString()}
+                    {new Date((application.applied_date || application.created_at)).toLocaleDateString()}
                   </span>
                 </div>
                 {gmailLinks[application.id] && (
