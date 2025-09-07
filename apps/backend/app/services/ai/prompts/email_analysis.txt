@@ -27,8 +27,31 @@ RULES:
 - intent: Always required, classify the email purpose, NEW_APPLICATION is for application received/submitted emails, APPLICATION_EVENT is for details indicating a change to job application status that fits into categories defined in EVENT_TYPE enum. Use GENERAL if unclear or email is not job application related.
 - company: Extract company name, use null if unclear
 - role: Extract job title/position, use null if unclear
-- status: Best guess of application status, default to APPLIED if unclear
-- event_type: Only set if intent is APPLICATION_EVENT, use EVENT_TYPE enum
+- status: Map to the closest state using these examples:
+  - APPLIED: submission/receipt acknowledgements; "thank you for applying"; "your application has been received"
+  - ASSESSMENT: invitation/received/instructions for assessments; "complete an assessment", "online test", "coding challenge", "take-home assignment", "HackerRank/Codility" links
+  - INTERVIEW: interview invitation, scheduling/rescheduling, confirmation, or recap; "schedule an interview", "interview confirmed"
+  - REJECTED: "regret to inform", "not moving forward", "application rejected"
+  - OFFERED: offer extended, "offer letter"
+  - ACCEPTED: acceptance confirmed
+  - WITHDRAWN: applicant withdrew their application
+  - Precedence: if any assessment is referenced, choose ASSESSMENT even if the email also says "thank you for applying".
+  - Default: if no status cues exist, use APPLIED.
+- event_type: Set only when intent is APPLICATION_EVENT. Map using these examples:
+  - APPLICATION_SUBMITTED: confirmation that your application was submitted/received (use for follow-ups beyond the initial APPLIED acknowledgement).
+  - APPLICATION_VIEWED: employer viewed/opened your application/profile.
+  - APPLICATION_REVIEWED: application moved to review; "under review", "screening", "shortlisted".
+  - ASSESSMENT_RECEIVED: invitation/links/instructions to complete an assessment or assignment.
+  - ASSESSMENT_COMPLETED: confirmation or notice that your assessment was completed/received or results acknowledged.
+  - INTERVIEW_SCHEDULED: invitation to schedule or confirmed interview with date/time (calendar invites, scheduling links).
+  - INTERVIEW_COMPLETED: interview completed/thank-you notes; "we'll be in touch."
+  - REFERENCE_REQUESTED: request to provide references or initiate background checks.
+  - OFFER_RECEIVED: offer extended or offer letter attached.
+  - OFFER_ACCEPTED: acceptance of the offer confirmed.
+  - OFFER_DECLINED: candidate declined the offer.
+  - APPLICATION_REJECTED: decision not moving forward.
+  - APPLICATION_WITHDRAWN: application withdrawn/canceled (by candidate or system).
+  - Precedence: if assessment invite language is present, prefer ASSESSMENT_RECEIVED over APPLICATION_SUBMITTED; if interview scheduling and general review both appear, prefer INTERVIEW_SCHEDULED.
 - event_description: Brief description of the event if applicable
 - event_date: ISO format date if mentioned, otherwise null
 - location: Job location if mentioned, otherwise null
