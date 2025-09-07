@@ -170,7 +170,7 @@ class GmailService(BaseService):
                     '"decision on your application") '
                     "OR "
                     "from:(*@greenhouse.io *@lever.co *@ashbyhq.com *@smartrecruiters.com "
-                    "*@myworkday.com *@workday.com *@recruitee.com *@workablemail.com)) "
+                    "*@myworkday.com *@workday.com *@recruitee.com *@workablemail.com *@linkedin.com)) "
                     "-category:promotions "
                     '-subject:(sale OR discount OR "% off" OR "free shipping" OR newsletter OR digest OR webinar OR promo OR event)'
                 )
