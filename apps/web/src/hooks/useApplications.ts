@@ -53,6 +53,20 @@ export const useApplications = (userId?: string) => {
     }
   };
 
+  const createApplication = async (
+    application: Omit<JobApplication, "id" | "created_at" | "last_updated_at" | "user_id">
+  ): Promise<JobApplication> => {
+    try {
+      const created = await jobApplicationsService.createApplication(application as any);
+      setApplications((prev) => [created, ...prev]);
+      return created;
+    } catch (err) {
+      throw new Error(
+        err instanceof Error ? err.message : "Failed to create application"
+      );
+    }
+  };
+
   const deleteApplication = async (id: string) => {
     try {
       await jobApplicationsService.deleteApplication(id);
@@ -70,6 +84,7 @@ export const useApplications = (userId?: string) => {
     error,
     refetch: fetchApplications,
     updateApplication,
+    createApplication,
     deleteApplication,
   };
 };
