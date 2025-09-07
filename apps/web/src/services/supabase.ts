@@ -106,7 +106,7 @@ export const applicationEventsService = {
       .select(
         `
         *,
-        job_applications!inner(user_id)
+        job_applications!inner(user_id,company,role)
       `
       )
       .eq("job_applications.user_id", userId)
@@ -114,7 +114,11 @@ export const applicationEventsService = {
       .limit(20);
 
     if (error) throw error;
-    return data || [];
+    return (data || []).map((e: any) => ({
+      ...e,
+      company: e?.company ?? e?.job_applications?.company ?? undefined,
+      role: e?.role ?? e?.job_applications?.role ?? undefined,
+    }));
   },
 
   async getEventsByApplicationId(
@@ -122,12 +126,19 @@ export const applicationEventsService = {
   ): Promise<ApplicationEvent[]> {
     const { data, error } = await supabase
       .from("application_events")
-      .select("*")
+      .select(`
+        *,
+        job_applications!inner(company,role)
+      `)
       .eq("application_id", applicationId)
       .order("event_date", { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []).map((e: any) => ({
+      ...e,
+      company: e?.company ?? e?.job_applications?.company ?? undefined,
+      role: e?.role ?? e?.job_applications?.role ?? undefined,
+    }));
   },
 
   async createEvent(
@@ -136,11 +147,18 @@ export const applicationEventsService = {
     const { data, error } = await supabase
       .from("application_events")
       .insert(event)
-      .select()
+      .select(`
+        *,
+        job_applications!inner(company,role)
+      `)
       .single();
 
     if (error) throw error;
-    return data;
+    return {
+      ...data,
+      company: (data as any)?.company ?? (data as any)?.job_applications?.company ?? undefined,
+      role: (data as any)?.role ?? (data as any)?.job_applications?.role ?? undefined,
+    } as any;
   },
 
   async deleteEvent(id: string): Promise<void> {
