@@ -401,9 +401,15 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
             {eventsLoading ? (
               <p className="text-sm text-muted-foreground">Loading events...</p>
             ) : appEvents.length ? (
-              appEvents.map((event) => (
-                <TimelineEventComponent key={event.id} event={event} />
-              ))
+              [...appEvents]
+                .sort(
+                  (a, b) =>
+                    new Date(b.email_received_at || b.event_date).getTime() -
+                    new Date(a.email_received_at || a.event_date).getTime()
+                )
+                .map((event) => (
+                  <TimelineEventComponent key={event.id} event={event} />
+                ))
             ) : (
               <p className="text-sm text-muted-foreground">No events yet</p>
             )}

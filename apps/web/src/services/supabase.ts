@@ -30,11 +30,20 @@ export const jobApplicationsService = {
       applied_date?: string;
     };
     const rows = (data ?? []) as DbJobApplication[];
-    return rows.map((row) => ({
-      ...row,
-      created_at: row.applied_date ?? row.created_at,
-      id: row.application_id,
-    }));
+    return rows.map((row) => {
+      const createdAt = row.applied_date ?? row.created_at;
+      // Normalize last_updated_at: if null/epoch fallback to applied_date or created_at
+      let lastUpdated = row.last_updated_at;
+      if (!lastUpdated || new Date(lastUpdated).getTime() === 0) {
+        lastUpdated = row.applied_date ?? row.created_at ?? lastUpdated;
+      }
+      return {
+        ...row,
+        created_at: createdAt,
+        last_updated_at: lastUpdated,
+        id: row.application_id,
+      };
+    });
   },
 
   async getApplicationById(id: string): Promise<JobApplication | null> {
@@ -53,12 +62,19 @@ export const jobApplicationsService = {
         application_id: string;
         created_at: string;
         applied_date?: string;
+        last_updated_at?: string | null;
       };
       const row = data as unknown as DbJobApplication;
+      const createdAt = row.applied_date ?? row.created_at;
+      let lastUpdated = row.last_updated_at;
+      if (!lastUpdated || new Date(lastUpdated).getTime() === 0) {
+        lastUpdated = row.applied_date ?? row.created_at ?? lastUpdated;
+      }
       const shaped: JobApplication = {
         ...(row as Omit<JobApplication, "id" | "created_at">),
         id: row.application_id,
-        created_at: row.applied_date ?? row.created_at,
+        created_at: createdAt,
+        last_updated_at: lastUpdated || createdAt,
       };
       return shaped;
     }
@@ -84,12 +100,19 @@ export const jobApplicationsService = {
         application_id: string;
         created_at: string;
         applied_date?: string;
+        last_updated_at?: string | null;
       };
       const row = data as unknown as DbJobApplication;
+      const createdAt = row.applied_date ?? row.created_at;
+      let lastUpdated = row.last_updated_at;
+      if (!lastUpdated || new Date(lastUpdated).getTime() === 0) {
+        lastUpdated = row.applied_date ?? row.created_at ?? lastUpdated;
+      }
       const shaped: JobApplication = {
         ...(row as Omit<JobApplication, "id" | "created_at">),
         id: row.application_id,
-        created_at: row.applied_date ?? row.created_at,
+        created_at: createdAt,
+        last_updated_at: lastUpdated || createdAt,
       };
       return shaped;
     }
@@ -119,13 +142,22 @@ export const jobApplicationsService = {
       application_id: string;
       created_at: string;
       applied_date?: string;
+      last_updated_at?: string | null;
     };
     const rows = (data ?? []) as DbJobApplication[];
-    return rows.map((row) => ({
-      ...row,
-      created_at: row.applied_date ?? row.created_at,
-      id: row.application_id,
-    }));
+    return rows.map((row) => {
+      const createdAt = row.applied_date ?? row.created_at;
+      let lastUpdated = row.last_updated_at;
+      if (!lastUpdated || new Date(lastUpdated).getTime() === 0) {
+        lastUpdated = row.applied_date ?? row.created_at ?? lastUpdated;
+      }
+      return {
+        ...row,
+        created_at: createdAt,
+        last_updated_at: lastUpdated || createdAt,
+        id: row.application_id,
+      };
+    });
   },
 
   async createApplication(
@@ -137,6 +169,8 @@ export const jobApplicationsService = {
       .insert({
         ...application,
         user_id: userId,
+        // If backend trigger doesn't immediately set last_updated_at, initialize it to applied_date or now
+        last_updated_at: (application as any).applied_date || new Date().toISOString(),
       })
       .select()
       .single();
@@ -147,12 +181,19 @@ export const jobApplicationsService = {
         application_id: string;
         created_at: string;
         applied_date?: string;
+        last_updated_at?: string | null;
       };
       const row = data as unknown as DbJobApplication;
+      const createdAt = row.applied_date ?? row.created_at;
+      let lastUpdated = row.last_updated_at;
+      if (!lastUpdated || new Date(lastUpdated).getTime() === 0) {
+        lastUpdated = row.applied_date ?? row.created_at ?? lastUpdated;
+      }
       const shaped: JobApplication = {
         ...(row as Omit<JobApplication, "id" | "created_at">),
         id: row.application_id,
-        created_at: row.applied_date ?? row.created_at,
+        created_at: createdAt,
+        last_updated_at: lastUpdated || createdAt,
       };
       return shaped;
     }
