@@ -21,7 +21,7 @@ export const jobApplicationsService = {
       .from("job_applications")
       .select("*")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .order("last_updated_at", { ascending: false });
 
     if (error) throw error;
     type DbJobApplication = Omit<JobApplication, "id" | "created_at"> & {
@@ -112,7 +112,7 @@ export const jobApplicationsService = {
       .from("job_applications")
       .select("*")
       .eq("user_id", userId === currentUserId ? userId : currentUserId)
-      .order("created_at", { ascending: false });
+      .order("last_updated_at", { ascending: false });
 
     if (error) throw error;
     type DbJobApplication = Omit<JobApplication, "id" | "created_at"> & {

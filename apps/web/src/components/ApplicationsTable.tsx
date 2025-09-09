@@ -330,10 +330,16 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
                 )}
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-3 w-3 text-muted-foreground" />
-                  <span>
-                    Applied:{" "}
-                    {new Date((application.applied_date || application.created_at)).toLocaleDateString()}
-                  </span>
+                  <div className="flex flex-col">
+                    <span>
+                      Applied:{" "}
+                      {new Date(application.applied_date || application.created_at).toLocaleDateString()}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Updated:{" "}
+                      {new Date(application.last_updated_at).toLocaleDateString()}
+                    </span>
+                  </div>
                 </div>
                 {gmailLinks[application.id] && (
                   <a
