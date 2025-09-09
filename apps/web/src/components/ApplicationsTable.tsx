@@ -42,7 +42,7 @@ const statusColors = {
 const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsTableProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] =
-    useState<keyof JobApplication>("created_at");
+    useState<keyof JobApplication>("last_updated_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [gmailLinks, setGmailLinks] = useState<Record<string, string>>({});
@@ -72,6 +72,19 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
   const sortedApplications = [...filteredApplications].sort((a, b) => {
     const aValue = a[sortField];
     const bValue = b[sortField];
+
+    const isDateField =
+      typeof aValue === "string" &&
+      typeof bValue === "string" &&
+      sortField.endsWith("_at");
+
+    if (isDateField) {
+      const aTime = new Date(aValue as string).getTime();
+      const bTime = new Date(bValue as string).getTime();
+      if (aTime < bTime) return sortDirection === "asc" ? -1 : 1;
+      if (aTime > bTime) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    }
 
     if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
     if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
