@@ -18,6 +18,8 @@ from ..base_service import (
 class GmailService(BaseService):
     """Service for managing Gmail API operations including labels, filters, and watch lifecycle."""
 
+    FORCE_PARSE_LABEL_NAME = "JobHub Force Parse"
+
     def __init__(self):
         self.service = None
         super().__init__()
@@ -299,6 +301,111 @@ class GmailService(BaseService):
         except HttpError as e:
             self._log_error("deleting filter", e)
             raise ServiceOperationError(f"Failed to delete filter: {str(e)}")
+
+    # Force-parse label helpers
+
+    def get_label_id_by_name(self, label_name: str) -> Optional[str]:
+        """
+        Return label ID by exact name, or None if not found.
+        """
+        if not self.service:
+            raise ServiceOperationError("Gmail service not initialized")
+        result = self.service.users().labels().list(userId="me").execute()
+        for label in result.get("labels", []) or []:
+            if label.get("name") == label_name:
+                return label.get("id")
+        return None
+
+    def create_label(
+        self, label_name: str, color: Optional[Dict[str, str]] = None
+    ) -> str:
+        """
+        Create a label and return its ID.
+        """
+        if not self.service:
+            raise ServiceOperationError("Gmail service not initialized")
+        body: Dict[str, Any] = {
+            "name": label_name,
+            "labelListVisibility": "labelShow",
+            "messageListVisibility": "show",
+        }
+        if color:
+            body["color"] = color
+        try:
+            result = (
+                self.service.users().labels().create(userId="me", body=body).execute()
+            )
+            return result.get("id")
+        except HttpError as e:
+            self._log_error("creating label", e)
+            raise ServiceOperationError(f"Failed to create label: {str(e)}")
+
+    def get_or_create_label_id(self, label_name: str) -> str:
+        """
+        Get or create a label by name and return its ID.
+        """
+        lid = self.get_label_id_by_name(label_name)
+        if lid:
+            return lid
+        return self.create_label(label_name)
+
+    def get_or_create_force_parse_label_id(self) -> str:
+        """
+        Get or create the JobHub Force Parse label and return its ID.
+        """
+        return self.get_or_create_label_id(self.FORCE_PARSE_LABEL_NAME)
+
+    def add_label_to_message(self, message_id: str, label_id: str) -> bool:
+        """
+        Add a label to a specific Gmail message.
+        """
+        if not self.service:
+            raise ServiceOperationError("Gmail service not initialized")
+        try:
+            self.service.users().messages().modify(
+                userId="me",
+                id=message_id,
+                body={"addLabelIds": [label_id]},
+            ).execute()
+            return True
+        except HttpError as e:
+            self._log_error("adding label to message", e)
+            raise ServiceOperationError(f"Failed to add label to message: {str(e)}")
+
+    def remove_label_from_message(self, message_id: str, label_id: str) -> bool:
+        """
+        Remove a label from a specific Gmail message.
+        """
+        if not self.service:
+            raise ServiceOperationError("Gmail service not initialized")
+        try:
+            self.service.users().messages().modify(
+                userId="me",
+                id=message_id,
+                body={"removeLabelIds": [label_id]},
+            ).execute()
+            return True
+        except HttpError as e:
+            self._log_error("removing label from message", e)
+            raise ServiceOperationError(
+                f"Failed to remove label from message: {str(e)}"
+            )
+
+    def add_force_parse_label_to_message(self, message_id: str) -> str:
+        """
+        Ensure the force-parse label exists and apply it to the message.
+        Returns the label ID used.
+        """
+        label_id = self.get_or_create_force_parse_label_id()
+        self.add_label_to_message(message_id, label_id)
+        return label_id
+
+    def remove_force_parse_label_from_message(self, message_id: str) -> bool:
+        """
+        Remove the force-parse label from the message if present.
+        """
+        label_id = self.get_or_create_force_parse_label_id()
+        return self.remove_label_from_message(message_id, label_id)
 
     # --- Watch lifecycle helpers ---
 

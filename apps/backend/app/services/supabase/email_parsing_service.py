@@ -34,6 +34,7 @@ class EmailParsingService(BaseService):
         thread_id: Optional[str] = None,
         history_id: Optional[int] = None,
         max_retries: int = 3,
+        force: bool = False,
     ) -> Dict[str, Any]:
         """
         Main email processing workflow WITHOUT storing full email contents.
@@ -58,7 +59,7 @@ class EmailParsingService(BaseService):
                 .execute()
             )
 
-            if existing_ref.data:
+            if existing_ref.data and not force:
                 self._log_operation("email_ref already exists", f"ID: {raw_email_id}")
                 self.logger.info(
                     f"email_process duplicate user={user_id} raw_email_id={raw_email_id}"
@@ -84,16 +85,23 @@ class EmailParsingService(BaseService):
                 except Exception:
                     ref_payload["history_id"] = history_id
 
-            ref_insert = (
-                await supabase.table("email_refs").insert(ref_payload).execute()
-            )
-            if not ref_insert.data:
-                raise ServiceOperationError("Failed to insert email reference")
-
-            email_id = ref_insert.data[0]["email_id"]
-            self.logger.info(
-                f"email_process ref_inserted user={user_id} raw_email_id={raw_email_id} email_id={email_id}"
-            )
+            # Determine or create the email_ref record
+            if existing_ref.data:
+                email_id = existing_ref.data[0]["email_id"]
+                if force:
+                    self.logger.info(
+                        f"email_process force_bypass_dedupe user={user_id} raw_email_id={raw_email_id} email_id={email_id}"
+                    )
+            else:
+                ref_insert = (
+                    await supabase.table("email_refs").insert(ref_payload).execute()
+                )
+                if not ref_insert.data:
+                    raise ServiceOperationError("Failed to insert email reference")
+                email_id = ref_insert.data[0]["email_id"]
+                self.logger.info(
+                    f"email_process ref_inserted user={user_id} raw_email_id={raw_email_id} email_id={email_id}"
+                )
 
             # For non-job emails, skip creating application/events, keep the ref only
             if parsed.intent == EmailIntent.GENERAL:
@@ -266,6 +274,66 @@ async def parse_and_persist(ref: dict, user_id: str, gmail_client) -> dict:
         decoded = _b64url_decode((payload.get("body") or {}).get("data", ""))
         body_text = decoded.strip()
 
+    # Force-parse label support
+    FORCE_LABEL_NAME = "JobHub Force Parse"
+
+    def _get_or_create_label_id(gmail_client, label_name: str) -> Optional[str]:
+        try:
+            labels_result = gmail_client.users().labels().list(userId="me").execute()
+            labels = labels_result.get("labels", []) or []
+            for label in labels:
+                if label.get("name") == label_name:
+                    return label.get("id")
+            # Create if not found
+            result = (
+                gmail_client.users()
+                .labels()
+                .create(
+                    userId="me",
+                    body={
+                        "name": label_name,
+                        "labelListVisibility": "labelShow",
+                        "messageListVisibility": "show",
+                    },
+                )
+                .execute()
+            )
+            return result.get("id")
+        except Exception:
+            return None
+
+    def _remove_label(gmail_client, message_id: str, label_id: Optional[str]) -> None:
+        if not label_id:
+            return
+        try:
+            gmail_client.users().messages().modify(
+                userId="me", id=message_id, body={"removeLabelIds": [label_id]}
+            ).execute()
+        except Exception:
+            pass
+
+    force_label_id = _get_or_create_label_id(gmail_client, FORCE_LABEL_NAME)
+    force_parse = force_label_id in set(msg.get("labelIds") or [])
+
+    # Early duplicate short-circuit (before LLM) unless force_parse is applied
+    supabase = await supabase_service.get_client()
+    existing_ref = (
+        await supabase.table("email_refs")
+        .select("email_id")
+        .eq("user_id", user_id)
+        .eq("external_email_id", ref["messageId"])
+        .limit(1)
+        .execute()
+    )
+    if existing_ref.data and not force_parse:
+        logger.info(
+            f"email_ingest duplicate_short_circuit user={user_id} msg_id={ref.get('messageId')} email_id={existing_ref.data[0]['email_id']}"
+        )
+        return {
+            "status": "duplicate",
+            "email_id": existing_ref.data[0]["email_id"],
+        }
+
     email_input = LLMEmailInput(
         subject=subject,
         body_text=body_text or "(empty)",
@@ -282,7 +350,7 @@ async def parse_and_persist(ref: dict, user_id: str, gmail_client) -> dict:
         f"company={parsed.company} role={parsed.role} status={parsed.status.value} "
         f"event_type={(parsed.event_type.value if parsed.event_type else None)}"
     )
-    return await email_parsing_service.process_email(
+    result = await email_parsing_service.process_email(
         parsed=parsed,
         raw_email_id=ref["messageId"],
         user_id=user_id,
@@ -293,4 +361,17 @@ async def parse_and_persist(ref: dict, user_id: str, gmail_client) -> dict:
         received_at=received_at_dt,
         thread_id=ref.get("threadId"),
         history_id=ref.get("historyId"),
+        force=force_parse,
     )
+    # If force-parse label is present, remove it after processing (keep Job Applications label intact)
+    if force_parse and force_label_id:
+        try:
+            _remove_label(gmail_client, ref["messageId"], force_label_id)
+            logger.info(
+                f"email_ingest force_label_removed user={user_id} msg_id={ref.get('messageId')} label_id={force_label_id}"
+            )
+        except Exception as e:
+            logger.warning(
+                f"email_ingest force_label_remove_failed user={user_id} msg_id={ref.get('messageId')} err={e}"
+            )
+    return result

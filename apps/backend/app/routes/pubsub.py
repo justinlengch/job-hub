@@ -122,10 +122,54 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
             )
 
         for ref in refs:
+            msg_id = ref.get("messageId")
+            thread_id = ref.get("threadId")
+            history_id = ref.get("historyId")
             logger.info(
-                f"gmail_push ingest_start user={user_id} msg_id={ref.get('messageId')} thread_id={ref.get('threadId')} history_id={ref.get('historyId')}"
+                f"gmail_push ingest_start user={user_id} msg_id={msg_id} thread_id={thread_id} history_id={history_id}"
             )
             try:
+                # Determine if force-parse label applied
+                try:
+                    force_label_id = gmail_service.get_or_create_force_parse_label_id()
+                except Exception:
+                    force_label_id = None
+
+                has_force = False
+                try:
+                    meta = (
+                        gmail_service.service.users()
+                        .messages()
+                        .get(userId="me", id=msg_id, format="metadata")
+                        .execute()
+                    )
+                    has_force = force_label_id in set(meta.get("labelIds") or [])
+                except Exception as e:
+                    logger.warning(
+                        f"gmail_push meta_fetch_failed user={user_id} msg_id={msg_id} err={e}"
+                    )
+
+                # Early duplicate short-circuit unless force label is present
+                if not has_force:
+                    try:
+                        existing_ref = (
+                            await supabase.table("email_refs")
+                            .select("email_id")
+                            .eq("user_id", user_id)
+                            .eq("external_email_id", msg_id)
+                            .limit(1)
+                            .execute()
+                        )
+                        if existing_ref.data:
+                            logger.info(
+                                f"gmail_push duplicate_short_circuit user={user_id} msg_id={msg_id} email_id={existing_ref.data[0]['email_id']}"
+                            )
+                            continue
+                    except Exception as e:
+                        logger.warning(
+                            f"gmail_push duplicate_check_failed user={user_id} msg_id={msg_id} err={e}"
+                        )
+
                 result = await parse_and_persist(ref, user_id, gmail_service.service)
                 intent = result.get("intent")
                 status = result.get("status")
@@ -133,11 +177,11 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
                 app = result.get("application") or {}
                 app_id = app.get("application_id") if isinstance(app, dict) else None
                 logger.info(
-                    f"gmail_push ingest_done user={user_id} msg_id={ref.get('messageId')} status={status} intent={intent} email_id={email_id} application_id={app_id}"
+                    f"gmail_push ingest_done user={user_id} msg_id={msg_id} status={status} intent={intent} email_id={email_id} application_id={app_id}"
                 )
             except Exception as e:
                 logger.exception(
-                    f"gmail_push parse_and_persist_failed user={user_id} msg={ref.get('messageId')} err={e}"
+                    f"gmail_push parse_and_persist_failed user={user_id} msg={msg_id} err={e}"
                 )
 
         # Persist latest_history_id (best-effort)
