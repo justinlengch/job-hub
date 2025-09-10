@@ -25,6 +25,53 @@ class JobApplicationService(BaseService):
         supabase = await supabase_service.get_client()
 
         try:
+            # Pre-insert deduplication: find an existing application using fuzzy matcher
+            application_id = (
+                await application_matcher_service.find_matching_application(
+                    user_id, parsed.company, parsed.role
+                )
+            )
+
+            if application_id:
+                # Update existing application with latest info and link the email_ref
+                update_data = {
+                    "last_updated_at": datetime.now().isoformat(),
+                    "last_email_received_at": datetime.now().isoformat(),
+                }
+                if parsed.status:
+                    update_data["status"] = parsed.status.value
+                if parsed.location:
+                    update_data["location"] = parsed.location
+                if parsed.salary_range:
+                    update_data["salary_range"] = parsed.salary_range
+                if parsed.notes:
+                    update_data["notes"] = parsed.notes
+
+                update_resp = (
+                    await supabase.table("job_applications")
+                    .update(update_data)
+                    .eq("application_id", application_id)
+                    .execute()
+                )
+
+                if not update_resp.data:
+                    raise ServiceOperationError(
+                        f"Application with ID {application_id} not found for update"
+                    )
+
+                await (
+                    supabase.table("email_refs")
+                    .update({"application_id": application_id})
+                    .eq("email_id", email_id)
+                    .execute()
+                )
+
+                self._log_operation(
+                    "linked to existing application", f"ID: {application_id}"
+                )
+                return update_resp.data[0]
+
+            # No match: create new application
             application_data = {
                 "user_id": user_id,
                 "company": parsed.company,
