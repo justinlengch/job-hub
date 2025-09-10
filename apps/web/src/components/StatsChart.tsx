@@ -46,10 +46,10 @@ const renderCustomizedLabel = ({
   percent,
   name,
 }: PieLabelProps) => {
-  const labelRadius = outerRadius + 26;
+  const labelRadius = outerRadius + 14;
   const x = cx + labelRadius * Math.cos(-midAngle * RADIAN);
   const y = cy + labelRadius * Math.sin(-midAngle * RADIAN);
-  const padding = 8;
+  const padding = 4;
   const finalX = x + (x > cx ? padding : -padding);
 
   return (
