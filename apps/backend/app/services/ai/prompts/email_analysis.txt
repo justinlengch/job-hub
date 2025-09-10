@@ -43,7 +43,7 @@ RULES:
   - OFFERED: offer extended, "offer letter"
   - ACCEPTED: acceptance confirmed
   - WITHDRAWN: applicant withdrew their application
-  - Precedence: if any assessment is referenced, choose ASSESSMENT even if the email also says "thank you for applying".
+  - Precedence: if any assessment is provided or requested, choose ASSESSMENT even if the email also says "thank you for applying".
   - Default: if no status cues exist, use APPLIED.
 - event_type: Set only when intent is APPLICATION_EVENT. Map using these examples:
   - APPLICATION_RECEIVED: confirmation that your application was submitted/received (use for follow-ups beyond the initial APPLIED acknowledgement).

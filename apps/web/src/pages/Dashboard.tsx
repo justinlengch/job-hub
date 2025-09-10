@@ -137,7 +137,7 @@ const Dashboard = () => {
             icon={Briefcase}
             color="text-indigo-600"
             bgColor="bg-indigo-100"
-            highlighted
+            tinted
           />
           <StatusCard
             title="Applied"
@@ -177,7 +177,7 @@ const Dashboard = () => {
         </div>
 
         {/* Charts */}
-        <div className="mb-8">
+        <div className="mb-8 pt-2">
           <StatsChart statusCounts={statusCounts} />
         </div>
 

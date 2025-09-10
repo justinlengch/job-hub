@@ -66,6 +66,27 @@ const renderCustomizedLabel = ({
   );
 };
 
+type PieLabelLineProps = {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  outerRadius: number;
+};
+
+const renderLabelLine = ({ cx, cy, midAngle, outerRadius }: PieLabelLineProps) => {
+  const gap = 6; // leave a small gap from the pie
+  const lineLen = 14; // length of the leader line segment
+  const startR = outerRadius + gap;
+  const endR = startR + lineLen;
+
+  const x1 = cx + startR * Math.cos(-midAngle * RADIAN);
+  const y1 = cy + startR * Math.sin(-midAngle * RADIAN);
+  const x2 = cx + endR * Math.cos(-midAngle * RADIAN);
+  const y2 = cy + endR * Math.sin(-midAngle * RADIAN);
+
+  return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#999" strokeWidth={1} />;
+};
+
 type AxisTickProps = {
   x?: number;
   y?: number;
@@ -114,8 +135,8 @@ const StatsChart = ({ statusCounts }: StatsChartProps) => {
           <CardTitle className="text-lg">Application Status Overview</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={barData} margin={{ bottom: 48 }}>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={barData} margin={{ top: 20, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" interval={0} tick={<RenderXAxisTick />} height={70} />
               <YAxis />
@@ -135,7 +156,7 @@ const StatsChart = ({ statusCounts }: StatsChartProps) => {
           <CardTitle className="text-lg">Status Distribution</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={360}>
+          <ResponsiveContainer width="100%" height={420}>
             <PieChart>
               <Legend
                 layout="vertical"
@@ -147,11 +168,11 @@ const StatsChart = ({ statusCounts }: StatsChartProps) => {
               <Pie
                 data={pieData}
                 nameKey="name"
-                cx="42%"
+                cx="46%"
                 cy="50%"
                 paddingAngle={2}
-                outerRadius={110}
-                labelLine={{ stroke: "#999", strokeWidth: 1 }}
+                outerRadius={130}
+                labelLine={false}
                 label={renderCustomizedLabel}
 
                 fill="#8884d8"

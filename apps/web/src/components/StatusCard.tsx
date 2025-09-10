@@ -9,11 +9,22 @@ interface StatusCardProps {
   color: string;
   bgColor: string;
   highlighted?: boolean;
+  tinted?: boolean;
 }
 
-const StatusCard = ({ title, count, icon: Icon, color, bgColor, highlighted = false }: StatusCardProps) => {
+const StatusCard = ({
+  title,
+  count,
+  icon: Icon,
+  color,
+  bgColor,
+  highlighted = false,
+  tinted = false,
+}: StatusCardProps) => {
   return (
-    <Card className={`hover:shadow-lg transition-shadow duration-200 ${highlighted ? 'ring-2 ring-offset-1 ring-indigo-500' : ''}`}>
+    <Card
+      className={`hover:shadow-lg transition-shadow duration-200 ${highlighted ? 'ring-2 ring-offset-1 ring-indigo-500' : ''} ${(highlighted || tinted) ? 'border border-indigo-200/60 bg-gradient-to-b from-indigo-50/50 to-white' : ''}`}
+    >
       <CardContent className="p-6">
         <div className="flex items-center justify-between">
           <div>
