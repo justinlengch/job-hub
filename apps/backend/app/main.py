@@ -1,5 +1,23 @@
 import asyncio
 import logging
+import os
+import sys
+
+# Configure root logging to stdout for Heroku/uvicorn
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+root_logger = logging.getLogger()
+if not root_logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
+root_logger.setLevel(LOG_LEVEL)
+
+# Align uvicorn loggers with root log level
+logging.getLogger("uvicorn").setLevel(LOG_LEVEL)
+logging.getLogger("uvicorn.error").setLevel(LOG_LEVEL)
+logging.getLogger("uvicorn.access").setLevel(LOG_LEVEL)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
