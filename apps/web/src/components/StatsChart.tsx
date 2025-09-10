@@ -46,13 +46,15 @@ const renderCustomizedLabel = ({
   percent,
   name,
 }: PieLabelProps) => {
-  const radius = outerRadius + 20;
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  const labelRadius = outerRadius + 26;
+  const x = cx + labelRadius * Math.cos(-midAngle * RADIAN);
+  const y = cy + labelRadius * Math.sin(-midAngle * RADIAN);
+  const padding = 8;
+  const finalX = x + (x > cx ? padding : -padding);
 
   return (
     <text
-      x={x}
+      x={finalX}
       y={y}
       fill="#555"
       textAnchor={x > cx ? "start" : "end"}
@@ -143,7 +145,7 @@ const StatsChart = ({ statusCounts }: StatsChartProps) => {
                 cy="50%"
                 paddingAngle={2}
                 outerRadius={80}
-                labelLine={{ stroke: "#999" }}
+                labelLine={{ stroke: "#999", strokeWidth: 1 }}
                 label={renderCustomizedLabel}
 
                 fill="#8884d8"
