@@ -102,6 +102,9 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
             return
 
         since = last_history_id or pushed_history_id
+        logger.info(
+            f"gmail_push begin_processing user={user_id} email={email_address} pushed_history_id={pushed_history_id} last_history_id={last_history_id} since={since} label_id={label_id}"
+        )
         refs, latest_history_id = gmail_history_service.process_history(
             user_id=user_id,
             gmail_client=gmail_service.service,
@@ -119,8 +122,19 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
             )
 
         for ref in refs:
+            logger.info(
+                f"gmail_push ingest_start user={user_id} msg_id={ref.get('messageId')} thread_id={ref.get('threadId')} history_id={ref.get('historyId')}"
+            )
             try:
-                await parse_and_persist(ref, user_id, gmail_service.service)
+                result = await parse_and_persist(ref, user_id, gmail_service.service)
+                intent = result.get("intent")
+                status = result.get("status")
+                email_id = result.get("email_id")
+                app = result.get("application") or {}
+                app_id = app.get("application_id") if isinstance(app, dict) else None
+                logger.info(
+                    f"gmail_push ingest_done user={user_id} msg_id={ref.get('messageId')} status={status} intent={intent} email_id={email_id} application_id={app_id}"
+                )
             except Exception as e:
                 logger.exception(
                     f"gmail_push parse_and_persist_failed user={user_id} msg={ref.get('messageId')} err={e}"

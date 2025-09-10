@@ -31,6 +31,9 @@ class GmailHistoryService(BaseService):
         refs: Dict[str, Dict] = {}
         latest_history_id = since_history_id
         page_token = None
+        logger.info(
+            f"history start user={user_id} since={since_history_id} label_id={label_id}"
+        )
 
         try:
             while True:
@@ -63,6 +66,9 @@ class GmailHistoryService(BaseService):
                                     "threadId": msg.get("threadId"),
                                     "historyId": str(hist_id),
                                 }
+                                logger.info(
+                                    f"history ref_collected user={user_id} messageId={mid} threadId={msg.get('threadId')} historyId={hist_id} source=messagesAdded"
+                                )
 
                     # labelAdded events may add the label after initial receipt
                     for labeled in hist.get("labelsAdded", []):
@@ -76,8 +82,14 @@ class GmailHistoryService(BaseService):
                                     "threadId": msg.get("threadId"),
                                     "historyId": str(hist_id),
                                 }
+                                logger.info(
+                                    f"history ref_collected user={user_id} messageId={mid} threadId={msg.get('threadId')} historyId={hist_id} source=labelsAdded"
+                                )
 
                 page_token = response.get("nextPageToken")
+                logger.info(
+                    f"history page_processed user={user_id} since={since_history_id} next_page={bool(page_token)} latest={latest_history_id}"
+                )
                 if not page_token:
                     break
 

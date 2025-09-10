@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -6,6 +7,8 @@ from app.services.ai.llm_service import extract_job_info
 from app.services.base_service import BaseService, ServiceOperationError
 from app.services.supabase.job_application_service import job_application_service
 from app.services.supabase.supabase_client import supabase_service
+
+logger = logging.getLogger(__name__)
 
 
 class EmailParsingService(BaseService):
@@ -39,6 +42,11 @@ class EmailParsingService(BaseService):
         """
         try:
             supabase = await supabase_service.get_client()
+            self.logger.info(
+                f"email_process begin user={user_id} raw_email_id={raw_email_id} subject={subject!r} sender={sender!r} "
+                f"body_text_len={(len(body_text) if body_text else 0)} body_html_len={(len(body_html) if body_html else 0)} "
+                f"received_at={received_at} thread_id={thread_id} history_id={history_id} intent={parsed.intent.value}"
+            )
 
             # Idempotency: check existing minimal reference
             existing_ref = (
@@ -52,6 +60,9 @@ class EmailParsingService(BaseService):
 
             if existing_ref.data:
                 self._log_operation("email_ref already exists", f"ID: {raw_email_id}")
+                self.logger.info(
+                    f"email_process duplicate user={user_id} raw_email_id={raw_email_id}"
+                )
                 return {
                     "status": "duplicate",
                     "email_id": existing_ref.data[0]["email_id"],
@@ -80,12 +91,19 @@ class EmailParsingService(BaseService):
                 raise ServiceOperationError("Failed to insert email reference")
 
             email_id = ref_insert.data[0]["email_id"]
+            self.logger.info(
+                f"email_process ref_inserted user={user_id} raw_email_id={raw_email_id} email_id={email_id}"
+            )
 
             # For non-job emails, skip creating application/events, keep the ref only
             if parsed.intent == EmailIntent.GENERAL:
                 self._log_operation(
                     "non job-related email skipped",
                     f"ID: {raw_email_id} - not job related",
+                )
+                self.logger.info(
+                    f"email_process skipped_non_job user={user_id} raw_email_id={raw_email_id} email_id={email_id} "
+                    f"subject={subject!r} sender={sender!r}"
                 )
                 return {
                     "status": "skipped",
@@ -112,6 +130,10 @@ class EmailParsingService(BaseService):
                 )
                 result["event"] = event_data
 
+            self.logger.info(
+                f"email_process done user={user_id} raw_email_id={raw_email_id} email_id={email_id} "
+                f"status=processed intent={parsed.intent.value}"
+            )
             return result
 
         except Exception as e:
@@ -242,8 +264,17 @@ async def parse_and_persist(ref: dict, user_id: str, gmail_client) -> dict:
         body_text=body_text or "(empty)",
         body_html=body_html_clean or None,
     )
+    logger.info(
+        f"email_ingest payload_summary user={user_id} msg_id={ref.get('messageId')} subject={subject!r} sender={sender!r} "
+        f"body_text_len={(len(body_text) if body_text else 0)} body_html_len={(len(body_html_clean) if body_html_clean else 0)}"
+    )
     parsed = await extract_job_info(email_input)
 
+    logger.info(
+        f"email_ingest llm_result user={user_id} msg_id={ref.get('messageId')} intent={parsed.intent.value} "
+        f"company={parsed.company} role={parsed.role} status={parsed.status.value} "
+        f"event_type={(parsed.event_type.value if parsed.event_type else None)}"
+    )
     return await email_parsing_service.process_email(
         parsed=parsed,
         raw_email_id=ref["messageId"],
