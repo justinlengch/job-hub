@@ -129,6 +129,13 @@ class EmailParsingService(BaseService):
                     user_id, parsed, email_id
                 )
                 result["event"] = event_data
+                if isinstance(event_data, dict) and event_data.get(
+                    "created_new_application"
+                ):
+                    self.logger.info(
+                        f"email_process created_new_application user={user_id} raw_email_id={raw_email_id} email_id={email_id} "
+                        f"company={parsed.company} role={parsed.role}"
+                    )
 
             self.logger.info(
                 f"email_process done user={user_id} raw_email_id={raw_email_id} email_id={email_id} "

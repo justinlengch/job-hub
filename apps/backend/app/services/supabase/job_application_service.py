@@ -74,6 +74,7 @@ class JobApplicationService(BaseService):
         """
         supabase = await supabase_service.get_client()
 
+        created_new_application = False
         try:
             application_id = (
                 await application_matcher_service.find_matching_application(
@@ -86,10 +87,47 @@ class JobApplicationService(BaseService):
                     "no matching application found",
                     f"user: {user_id}, company: {parsed.company}, role: {parsed.role}",
                 )
-                return {
-                    "status": "no_match",
-                    "message": "No matching application found",
+                # Create a new application when no match is found, even if status is beyond APPLIED
+                application_data = {
+                    "user_id": user_id,
+                    "company": parsed.company,
+                    "role": parsed.role,
+                    "status": parsed.status.value if parsed.status else "APPLIED",
+                    "location": parsed.location,
+                    "salary_range": parsed.salary_range,
+                    "notes": parsed.notes,
+                    "applied_date": datetime.now().isoformat(),
+                    "last_updated_at": datetime.now().isoformat(),
+                    "last_email_received_at": datetime.now().isoformat(),
                 }
+
+                app_response = (
+                    await supabase.table("job_applications")
+                    .insert(application_data)
+                    .execute()
+                )
+
+                if not app_response.data:
+                    raise ServiceOperationError(
+                        "Failed to insert job application (no-match path)"
+                    )
+
+                created_app = app_response.data[0]
+                application_id = created_app["application_id"]
+
+                # Link the email_ref immediately to the newly created application
+                await (
+                    supabase.table("email_refs")
+                    .update({"application_id": application_id})
+                    .eq("email_id", email_id)
+                    .execute()
+                )
+
+                created_new_application = True
+
+                self._log_operation(
+                    "created application for unmatched event", f"ID: {application_id}"
+                )
 
             event_data = {
                 "application_id": application_id,
@@ -149,6 +187,7 @@ class JobApplicationService(BaseService):
                 "application_id": application_id,
                 "event": created_event,
                 "updated_fields": list(update_data.keys()),
+                "created_new_application": created_new_application,
             }
 
         except Exception:
