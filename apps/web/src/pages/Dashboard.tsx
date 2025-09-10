@@ -17,6 +17,7 @@ import {
   XCircle,
   TrendingUp,
   ClipboardCheck,
+  Briefcase,
 } from "lucide-react";
 
 const Dashboard = () => {
@@ -80,6 +81,15 @@ const Dashboard = () => {
     }
   );
 
+  const totalCount =
+    statusCounts.APPLIED +
+    statusCounts.ASSESSMENT +
+    statusCounts.INTERVIEW +
+    statusCounts.REJECTED +
+    statusCounts.OFFERED +
+    statusCounts.ACCEPTED +
+    statusCounts.WITHDRAWN;
+
   // Filter timeline events based on selected status
   const filteredEvents =
     selectedStatus === "all"
@@ -117,8 +127,26 @@ const Dashboard = () => {
           </p>
         </div>
 
+        {/* Total Applications */}
+        <div className="mb-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Applications</p>
+                  <p className="text-3xl font-bold">{totalCount}</p>
+                </div>
+                <div className="p-3 rounded-full bg-indigo-100">
+                  <Briefcase className="h-6 w-6 text-indigo-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Status Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
+
           <StatusCard
             title="Applied"
             count={statusCounts.APPLIED}
