@@ -76,8 +76,7 @@ const Spreadsheet = () => {
             Applications Spreadsheet
           </h1>
           <p className="text-gray-600">
-            Detailed view of all your job applications with search, sort, and
-            export capabilities
+            Detailed view of all your job applications
           </p>
         </div>
 

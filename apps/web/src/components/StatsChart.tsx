@@ -57,6 +57,7 @@ const renderCustomizedLabel = ({
       x={finalX}
       y={y}
       fill="#555"
+      fontSize={14}
       textAnchor={x > cx ? "start" : "end"}
       dominantBaseline="central"
     >
@@ -135,16 +136,22 @@ const StatsChart = ({ statusCounts }: StatsChartProps) => {
           <CardTitle className="text-lg">Status Distribution</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={360}>
             <PieChart>
-              <Legend layout="vertical" align="right" verticalAlign="middle" />
+              <Legend
+                layout="vertical"
+                align="right"
+                verticalAlign="middle"
+                iconSize={14}
+                wrapperStyle={{ fontSize: 14, lineHeight: "28px" }}
+              />
               <Pie
                 data={pieData}
                 nameKey="name"
-                cx="35%"
+                cx="42%"
                 cy="50%"
                 paddingAngle={2}
-                outerRadius={80}
+                outerRadius={110}
                 labelLine={{ stroke: "#999", strokeWidth: 1 }}
                 label={renderCustomizedLabel}
 
