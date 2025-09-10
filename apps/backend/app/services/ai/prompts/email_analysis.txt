@@ -26,7 +26,15 @@ SCHEMA:
 RULES:
 - intent: Always required, classify the email purpose, NEW_APPLICATION is for application received/submitted emails, APPLICATION_EVENT is for details indicating a change to job application status that fits into categories defined in EVENT_TYPE enum. Use GENERAL if unclear or email is not job application related.
 - company: Extract company name, use null if unclear
-- role: Extract job title/position, use null if unclear
+- role: Extract the job title/position only; keep relevant scope/discipline when attached with a hyphen or colon (e.g., "Backend Software Engineer - Data Safety and Compliance"). Remove unrelated qualifiers and any parenthetical/bracketed content that is not part of the title. Use null if unclear.
+  - Keep examples:
+    - "Backend Software Engineer - Data Safety and Compliance" → "Backend Software Engineer - Data Safety and Compliance"
+    - "Full Stack Developer - SAP Build Mobile and AI" → "Full Stack Developer - SAP Build Mobile and AI"
+  - Strip examples:
+    - "Junior Application Developer (Fresh grads welcomed)" → "Junior Application Developer"
+    - "Software Engineer (New Grad)" → "Software Engineer"
+    - "Data Analyst (Immediate Start)" → "Data Analyst"
+  - Do NOT include: company name, team/department branding, location, employment type (full-time/contract), timeframes (Summer 2025), benefits, eligibility notes, or marketing text.
 - status: Map to the closest state using these examples:
   - APPLIED: submission/receipt acknowledgements; "thank you for applying"; "your application has been received"
   - ASSESSMENT: invitation/received/instructions for assessments; "complete an assessment", "online test", "coding challenge", "take-home assignment", "HackerRank/Codility" links

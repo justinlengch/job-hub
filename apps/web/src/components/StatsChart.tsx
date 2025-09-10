@@ -97,7 +97,6 @@ const StatsChart = ({ statusCounts }: StatsChartProps) => {
       color: COLORS.INTERVIEW,
     },
     { name: "Offered", value: statusCounts.OFFERED, color: COLORS.OFFERED },
-    { name: "Accepted", value: statusCounts.ACCEPTED, color: COLORS.ACCEPTED },
     { name: "Rejected", value: statusCounts.REJECTED, color: COLORS.REJECTED },
     {
       name: "Withdrawn",
