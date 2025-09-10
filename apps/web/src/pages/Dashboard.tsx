@@ -135,10 +135,10 @@ const Dashboard = () => {
             title="Total"
             count={totalCount}
             icon={Briefcase}
-            color="text-amber-700"
-            bgColor="bg-amber-100"
+            color="text-indigo-600"
+            bgColor="bg-indigo-100"
             tinted
-            accent="amber"
+            accent="indigo"
           />
           <StatusCard
             title="Applied"
