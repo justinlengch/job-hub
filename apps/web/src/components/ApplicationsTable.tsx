@@ -19,7 +19,7 @@ import {
   Trash,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import { Label } from "@/components/ui/label";
 import TimelineEventComponent from "@/components/TimelineEvent";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 
@@ -257,7 +257,7 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
           <Card
             key={application.id}
             onClick={() => handleOpenDetails(application)}
-            className="relative p-6 hover:shadow-md transition-shadow duration-200 cursor-pointer"
+            className="relative p-6 pr-12 hover:shadow-md transition-shadow duration-200 cursor-pointer"
             role="button"
             tabIndex={0}
           >
@@ -370,19 +370,15 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
               {/* Notes */}
               <div className="space-y-2">
                 {application.notes && (
-                  <HoverCard>
-                    <HoverCardTrigger asChild>
-                      <p
-                        className="text-sm text-muted-foreground line-clamp-4 whitespace-pre-wrap"
-                        title={application.notes}
-                      >
-                        {application.notes}
-                      </p>
-                    </HoverCardTrigger>
-                    <HoverCardContent className="max-w-[28rem] md:max-w-[32rem] break-words whitespace-pre-wrap">
+                  <>
+                    <Label className="text-xs text-muted-foreground">Notes</Label>
+                    <p
+                      className="text-sm text-muted-foreground line-clamp-3 whitespace-pre-wrap"
+                      title={application.notes}
+                    >
                       {application.notes}
-                    </HoverCardContent>
-                  </HoverCard>
+                    </p>
+                  </>
                 )}
               </div>
             </div>
