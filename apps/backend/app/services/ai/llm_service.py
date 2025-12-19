@@ -59,15 +59,11 @@ def _clean_response(content: str) -> str:
 async def _call_gemini_with_retry(
     system_prompt: str,
     user_prompt: str,
-    model_name: str = "gemini-2.5-flash-lite-preview-06-17",
+    model_name: str = "gemini-2.5-flash-lite",
     max_retries: int = 3,
 ) -> str:
     """
     Call Gemini API with exponential backoff retry.
-
-    Model Strategy:
-    - Primary: gemini-2.5-flash-lite-preview-06-17 (higher daily quota, lower RPM)
-    - Fallback: gemini-2.0-flash-lite (higher RPM, lower daily quota)
     """
 
     config = types.GenerateContentConfig(
