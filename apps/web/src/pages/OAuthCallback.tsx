@@ -85,23 +85,23 @@ export default function OAuthCallback() {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
+          redirect: "manual",
         });
 
-        // If backend responds with non-OK, surface the error text
-        if (!resp.ok) {
-          const text = await resp.text();
-          setError(
-            `Failed to complete linking. ${
-              text || `Status ${resp.status}`
-            }`
-          );
-          return;
-        }
+        const isRedirectResponse =
+                  resp.type === "opaqueredirect" || (resp.status >= 300 && resp.status < 400);
 
-        await resp
-          .clone()
-          .json()
-          .catch(() => null);
+                if (!isRedirectResponse && !resp.ok) {
+                  const text = await resp.text().catch(() => "");
+                  setError(
+                    `Failed to complete linking. ${text || `Status ${resp.status}`}`
+                  );
+                  return;
+                }
+
+                if (!isRedirectResponse) {
+                  await resp.clone().json().catch(() => null);
+                }
 
         try {
           window.history.replaceState(
