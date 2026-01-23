@@ -168,11 +168,11 @@ async def extract_job_info(email_input: LLMEmailInput) -> LLMEmailOutput:
         logger.error(f"First attempt failed: {e}")
 
         try:
-            logger.info("Retrying with gemini-2.0-flash-lite")
+            logger.info("Retrying with gemini-2.5-flash-lite")
             content = await _call_gemini_with_retry(
                 system_prompt,
                 user_prompt,
-                model_name="gemini-2.0-flash-lite",
+                model_name="gemini-2.5-flash-lite",
                 max_retries=1,
             )
 
