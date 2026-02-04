@@ -9,6 +9,9 @@ STATUS: APPLIED | ASSESSMENT | INTERVIEW | REJECTED | OFFERED | ACCEPTED | WITHD
 EVENT_TYPE: APPLICATION_RECEIVED | APPLICATION_VIEWED | APPLICATION_REVIEWED | ASSESSMENT_RECEIVED | ASSESSMENT_COMPLETED | INTERVIEW_SCHEDULED | INTERVIEW_COMPLETED | REFERENCE_REQUESTED | OFFER_RECEIVED | OFFER_ACCEPTED | OFFER_DECLINED | APPLICATION_REJECTED | APPLICATION_WITHDRAWN
 =================
 
+METADATA:
+- Email received at (ISO 8601): $received_at
+
 SCHEMA:
 {
 "intent": "<INTENT>",
@@ -24,6 +27,7 @@ SCHEMA:
 }
 
 RULES:
+- email_received_at_metadata: The value above is authoritative. When setting event_date, copy the email received timestamp exactly, including timezone. Do not infer or adjust it, and leave event_date null if this metadata is blank.
 - intent: Always required, classify the email purpose, NEW_APPLICATION is for application received/submitted emails, APPLICATION_EVENT is for details indicating a change to job application status that fits into categories defined in EVENT_TYPE enum. Use GENERAL if unclear or email is not job application related.
 - company: Extract company name, use null if unclear
 - role: Extract the job title/position only; keep relevant scope/discipline when attached with a hyphen or colon (e.g., "Backend Software Engineer - Data Safety and Compliance"). Remove unrelated qualifiers and any parenthetical/bracketed content that is not part of the title. Use null if unclear.
@@ -61,7 +65,7 @@ RULES:
   - APPLICATION_WITHDRAWN: application withdrawn/canceled (by candidate or system).
   - Precedence: if assessment invite language is present, prefer ASSESSMENT_RECEIVED over APPLICATION_SUBMITTED; if interview scheduling and general review both appear, prefer INTERVIEW_SCHEDULED.
 - event_description: Brief description of the event if applicable
-- event_date: ISO format date if mentioned, otherwise null
+- event_date: For APPLICATION_EVENT intents, use the email received timestamp provided above. If that metadata is missing or empty, output null. Do not use dates mentioned in the body.
 - location: Job location if mentioned, otherwise null
 - salary_range: Salary info if mentioned, otherwise null
 - notes: Any additional relevant information, otherwise null
@@ -73,6 +77,7 @@ RULES:
 
 ===== EMAIL =====
 Subject: $subject
+Email received at (ISO 8601): $received_at
 Body (plain text):
 $body_text
 HTML (optional, sanitized):

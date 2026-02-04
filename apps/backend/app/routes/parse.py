@@ -21,6 +21,7 @@ async def test_parse_email_no_auth(request: EmailParseRequest):
             subject=request.subject,
             body_text=request.body_text,
             body_html=request.body_html,
+            received_at=request.received_date,
         )
 
         # Extract job info using LLM
@@ -62,6 +63,7 @@ async def parse_email(
             subject=request.subject,
             body_text=request.body_text,
             body_html=request.body_html,
+            received_at=request.received_date,
         )
 
         job_info = await extract_job_info(email_input)

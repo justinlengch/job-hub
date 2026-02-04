@@ -21,6 +21,9 @@ class LLMEmailInput(BaseModel):
     subject: str = Field(..., description="Email subject line")
     body_text: str = Field(..., description="Plain-text body of the email")
     body_html: Optional[str] = Field(None, description="HTML body of the email")
+    received_at: Optional[datetime] = Field(
+        None, description="Timestamp when the email was received"
+    )
 
 
 class LLMEmailOutput(BaseModel):

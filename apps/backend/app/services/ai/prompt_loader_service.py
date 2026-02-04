@@ -15,30 +15,32 @@ def format_email_analysis_prompt(
     subject: str,
     body_text: str,
     body_html: Optional[str] = None,
+    received_at: Optional[str] = None,
 ) -> Tuple[str, str]:
     """
     Format email analysis prompt into separate system and user prompts.
-    
+
     Returns:
         Tuple of (system_prompt, user_prompt)
     """
     template_str = load_prompt("email_analysis")
-    
+
     if "===== EMAIL =====" in template_str:
         system_part, email_part = template_str.split("===== EMAIL =====", 1)
         system_prompt = system_part.strip()
-        
+
         template = Template(email_part)
         html_section = ""
         if body_html:
             html_section = f"\nHTML:\n{body_html}"
-        
+
         user_prompt = template.substitute(
             subject=subject,
             body_text=body_text,
             html_section=html_section,
+            received_at=received_at or "",
         ).strip()
-        
+
         return system_prompt, user_prompt
     else:
         # Fallback to original behavior if template doesn't have the split
@@ -46,11 +48,12 @@ def format_email_analysis_prompt(
         html_section = ""
         if body_html:
             html_section = f"\nHTML:\n{body_html}"
-        
+
         full_prompt = template.substitute(
             subject=subject,
             body_text=body_text,
             html_section=html_section,
+            received_at=received_at or "",
         )
-        
+
         return "", full_prompt

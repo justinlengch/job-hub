@@ -338,6 +338,7 @@ async def parse_and_persist(ref: dict, user_id: str, gmail_client) -> dict:
         subject=subject,
         body_text=body_text or "(empty)",
         body_html=body_html_clean or None,
+        received_at=received_at_dt,
     )
     logger.info(
         f"email_ingest payload_summary user={user_id} msg_id={ref.get('messageId')} subject={subject!r} sender={sender!r} "

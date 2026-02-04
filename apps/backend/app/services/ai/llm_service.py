@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+from datetime import datetime
 
 from google import genai
 from google.genai import types
@@ -122,10 +123,18 @@ async def extract_job_info(email_input: LLMEmailInput) -> LLMEmailOutput:
         LLMEmailOutput with extracted job information and intent classification
     """
 
+    received_at_value = ""
+    if email_input.received_at:
+        if isinstance(email_input.received_at, datetime):
+            received_at_value = email_input.received_at.isoformat()
+        else:
+            received_at_value = str(email_input.received_at)
+
     prompt = format_email_analysis_prompt(
         subject=email_input.subject,
         body_text=email_input.body_text,
         body_html=email_input.body_html,
+        received_at=received_at_value,
     )
 
     logger.info(
@@ -169,6 +178,7 @@ async def extract_job_info(email_input: LLMEmailInput) -> LLMEmailOutput:
 
         try:
             logger.info("Retrying with gemini-2.5-flash-lite")
+            # Reuse existing prompts so no additional received_at metadata is injected.
             content = await _call_gemini_with_retry(
                 system_prompt,
                 user_prompt,
