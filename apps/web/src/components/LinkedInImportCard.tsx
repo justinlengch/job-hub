@@ -17,15 +17,26 @@ const LinkedInImportCard = ({ onImported }: LinkedInImportCardProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [result, setResult] = useState<LinkedInImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [minAppliedDate, setMinAppliedDate] = useState("");
+  const [maxAppliedDate, setMaxAppliedDate] = useState("");
 
   const handleImport = async () => {
     if (!selectedFile) return;
+    if (minAppliedDate && maxAppliedDate && minAppliedDate > maxAppliedDate) {
+      const message = "Start date must be on or before end date";
+      setError(message);
+      toast.error(message);
+      return;
+    }
 
     setIsUploading(true);
     setError(null);
 
     try {
-      const response = await apiService.importLinkedInHistory(selectedFile);
+      const response = await apiService.importLinkedInHistory(selectedFile, {
+        min_applied_date: minAppliedDate || undefined,
+        max_applied_date: maxAppliedDate || undefined,
+      });
       setResult(response);
       toast.success("LinkedIn history imported");
       await Promise.resolve(onImported?.(response));
@@ -81,6 +92,27 @@ const LinkedInImportCard = ({ onImported }: LinkedInImportCardProps) => {
           )}
         </div>
 
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">From applied date</label>
+            <Input
+              type="date"
+              value={minAppliedDate}
+              onChange={(event) => setMinAppliedDate(event.target.value)}
+              max={maxAppliedDate || undefined}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">To applied date</label>
+            <Input
+              type="date"
+              value={maxAppliedDate}
+              onChange={(event) => setMaxAppliedDate(event.target.value)}
+              min={minAppliedDate || undefined}
+            />
+          </div>
+        </div>
+
         <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
           Required fields: company, role, and applied date. LinkedIn exports like
           <span className="font-medium text-foreground"> Company Name</span>,
@@ -98,8 +130,9 @@ const LinkedInImportCard = ({ onImported }: LinkedInImportCardProps) => {
         )}
 
         {result && (
-          <div className="grid gap-3 md:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-6">
             <SummaryTile label="Processed" value={result.summary.processed_rows} />
+            <SummaryTile label="Skipped" value={result.summary.skipped_rows ?? 0} />
             <SummaryTile label="Created" value={result.summary.created_applications} />
             <SummaryTile label="Merged" value={result.summary.merged_applications} />
             <SummaryTile label="Review" value={result.summary.review_items} />

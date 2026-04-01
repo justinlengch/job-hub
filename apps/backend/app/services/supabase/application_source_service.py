@@ -2,7 +2,7 @@ import csv
 import io
 import json
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
 from app.models.api.application_event import ApplicationEventType
@@ -264,12 +264,18 @@ class ApplicationSourceService(BaseService):
         }
 
     def parse_upload_rows(
-        self, filename: str, payload: bytes
-    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        self,
+        filename: str,
+        payload: bytes,
+        *,
+        min_applied_date: date | None = None,
+        max_applied_date: date | None = None,
+    ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         suffix = (filename or "").lower()
         decoded = payload.decode("utf-8-sig")
         parsed_rows: List[Dict[str, Any]] = []
         errors: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, Any]] = []
 
         if suffix.endswith(".json"):
             raw = json.loads(decoded)
@@ -280,11 +286,29 @@ class ApplicationSourceService(BaseService):
 
         for index, row in enumerate(rows, start=1):
             try:
-                parsed_rows.append(self._normalize_linkedin_row(row, index))
+                normalized = self._normalize_linkedin_row(row, index)
+                applied_date = normalized["applied_at"].date()
+                if min_applied_date and applied_date < min_applied_date:
+                    skipped.append(
+                        {
+                            "row_number": index,
+                            "message": f"Application date {applied_date.isoformat()} is before {min_applied_date.isoformat()}",
+                        }
+                    )
+                    continue
+                if max_applied_date and applied_date > max_applied_date:
+                    skipped.append(
+                        {
+                            "row_number": index,
+                            "message": f"Application date {applied_date.isoformat()} is after {max_applied_date.isoformat()}",
+                        }
+                    )
+                    continue
+                parsed_rows.append(normalized)
             except Exception as exc:
                 errors.append({"row_number": index, "message": str(exc)})
 
-        return parsed_rows, errors
+        return parsed_rows, errors, skipped
 
     async def _create_source_record(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         supabase = await supabase_service.get_client()

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -124,7 +124,7 @@ OpenAI,Software Engineer,"10/13/25, 1:07 AM",Submitted,https://jobs.example/open
 Broken Row,,2026-01-11,Submitted,https://jobs.example/bad
 """
 
-    rows, errors = application_source_service.parse_upload_rows(
+    rows, errors, skipped = application_source_service.parse_upload_rows(
         "linkedin.csv", csv_payload.encode("utf-8")
     )
 
@@ -143,6 +143,27 @@ Broken Row,,2026-01-11,Submitted,https://jobs.example/bad
     }
     assert len(errors) == 1
     assert errors[0]["row_number"] == 2
+    assert skipped == []
+
+
+def test_parse_upload_rows_skips_rows_outside_applied_date_range():
+    csv_payload = """Company Name,Job Title,Application Date,Job Url
+OpenAI,Software Engineer,"10/13/25, 1:07 AM",https://jobs.example/openai
+Anthropic,Research Engineer,"02/10/26, 9:30 AM",https://jobs.example/anthropic
+"""
+
+    rows, errors, skipped = application_source_service.parse_upload_rows(
+        "linkedin.csv",
+        csv_payload.encode("utf-8"),
+        min_applied_date=date(2026, 1, 1),
+        max_applied_date=date(2026, 12, 31),
+    )
+
+    assert errors == []
+    assert len(rows) == 1
+    assert rows[0]["company"] == "Anthropic"
+    assert len(skipped) == 1
+    assert skipped[0]["row_number"] == 1
 
 
 def test_ranker_distinguishes_auto_merge_and_review_scores():
@@ -191,7 +212,7 @@ def test_build_sankey_graph_marks_non_inferred_applied_only_paths_as_ghosted():
 
     ghosted_node = next(node for node in graph.nodes if node.id == "GHOSTED")
     assert ghosted_node.kind.value == "ghosted"
-    assert ghosted_node.column == 1
+    assert ghosted_node.column == 5
     assert ghosted_node.count == 1
 
     applied_node = next(node for node in graph.nodes if node.id == "APPLIED")
@@ -248,7 +269,7 @@ def test_build_sankey_graph_branches_through_rejection_and_final_round():
         "FINAL_ROUND",
         "OFFERED",
     ]
-    assert [node.column for node in graph.nodes] == [0, 3, 4, 5, 6]
+    assert [node.column for node in graph.nodes] == [0, 1, 2, 3, 4]
     assert [link.source + "->" + link.target for link in graph.links] == [
         "APPLIED->ASSESSMENT",
         "ASSESSMENT->INTERVIEW",
@@ -350,14 +371,14 @@ def test_build_sankey_graph_ignores_repeated_same_stage_events_and_handles_infer
 
     assert not any(link.source == "INTERVIEW" and link.target == "INTERVIEW" for link in graph.links)
     assert any(link.source == "APPLIED" and link.target == "INTERVIEW" and link.value == 2 for link in graph.links)
-    assert any(
-        link.source == "INTERVIEW" and link.target == "FINAL_ROUND" and link.value == 1
-        for link in graph.links
-    )
-    assert any(
-        node.id == "INTERVIEW" and node.kind.value == "progress" and node.column == 4
-        for node in graph.nodes
-    )
+        assert any(
+            link.source == "INTERVIEW" and link.target == "FINAL_ROUND" and link.value == 1
+            for link in graph.links
+        )
+        assert any(
+            node.id == "INTERVIEW" and node.kind.value == "progress" and node.column == 2
+            for node in graph.nodes
+        )
     assert any(
         node.id == "OFFERED" and node.kind.value == "progress" and node.column == 6
         for node in graph.nodes

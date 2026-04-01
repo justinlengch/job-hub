@@ -217,11 +217,17 @@ export interface SankeySnapshotCache {
 
 export interface LinkedInImportSummary {
   processed_rows: number;
+  skipped_rows?: number;
   created_applications: number;
   merged_applications: number;
   review_items: number;
   failed_rows: number;
   message?: string;
+}
+
+export interface LinkedInImportOptions {
+  min_applied_date?: string;
+  max_applied_date?: string;
 }
 
 export interface LinkedInImportResult {

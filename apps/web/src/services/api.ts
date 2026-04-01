@@ -3,6 +3,7 @@ import {
   EmailParseRequest,
   EmailParseResponse,
   FinalRoundToggleResponse,
+  LinkedInImportOptions,
   LinkedInImportResult,
   ManualApplicationEventCreate,
   ReviewQueueResponse,
@@ -95,9 +96,18 @@ export const apiService = {
     });
   },
 
-  async importLinkedInHistory(file: File): Promise<LinkedInImportResult> {
+  async importLinkedInHistory(
+    file: File,
+    options: LinkedInImportOptions = {}
+  ): Promise<LinkedInImportResult> {
     const formData = new FormData();
     formData.append("file", file);
+    if (options.min_applied_date) {
+      formData.append("min_applied_date", options.min_applied_date);
+    }
+    if (options.max_applied_date) {
+      formData.append("max_applied_date", options.max_applied_date);
+    }
     return requestFormData<LinkedInImportResult>("/api/linkedin/import", formData);
   },
 

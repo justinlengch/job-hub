@@ -1,6 +1,7 @@
+from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 
 from app.core.auth import get_current_user
 from app.models.api.application_event import ManualApplicationEventCreate
@@ -14,22 +15,51 @@ router = APIRouter(prefix="/api", tags=["applications"])
 @router.post("/linkedin/import")
 async def import_linkedin_history(
     file: UploadFile = File(...),
+    min_applied_date: Optional[str] = Form(default=None),
+    max_applied_date: Optional[str] = Form(default=None),
     current_user_id: str = Depends(get_current_user),
 ):
     try:
+        parsed_min_date = _parse_form_date(min_applied_date, "min_applied_date")
+        parsed_max_date = _parse_form_date(max_applied_date, "max_applied_date")
+        if parsed_min_date and parsed_max_date and parsed_min_date > parsed_max_date:
+            raise HTTPException(
+                status_code=400,
+                detail="min_applied_date must be on or before max_applied_date",
+            )
         payload = await file.read()
-        rows, errors = application_source_service.parse_upload_rows(
-            file.filename or "linkedin-upload.csv", payload
+        rows, errors, skipped = application_source_service.parse_upload_rows(
+            file.filename or "linkedin-upload.csv",
+            payload,
+            min_applied_date=parsed_min_date,
+            max_applied_date=parsed_max_date,
         )
         result = await application_source_service.import_linkedin_rows(
             current_user_id, rows
         )
+        result["summary"]["skipped_rows"] = len(skipped)
         if errors:
             result["errors"] = [*result.get("errors", []), *errors]
             result["summary"]["failed_rows"] += len(errors)
+        if skipped:
+            result["errors"] = [*result.get("errors", []), *skipped]
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+def _parse_form_date(value: Optional[str], field_name: str) -> Optional[date]:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} must be in YYYY-MM-DD format",
+        ) from exc
 
 
 @router.get("/applications/review-queue")
