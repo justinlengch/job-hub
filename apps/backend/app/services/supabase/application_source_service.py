@@ -34,14 +34,14 @@ from app.services.supabase.supabase_client import supabase_service
 
 SANKY_STAGE_ORDER = [
     "APPLIED",
-    "GHOSTED",
-    "REJECTED",
     "ASSESSMENT",
     "INTERVIEW",
     "FINAL_ROUND",
     "OFFERED",
     "ACCEPTED",
+    "REJECTED",
     "WITHDRAWN",
+    "GHOSTED",
 ]
 
 SANKY_STAGE_KIND = {
@@ -58,14 +58,14 @@ SANKY_STAGE_KIND = {
 
 SANKY_STAGE_COLUMN = {
     "APPLIED": 0,
-    "GHOSTED": 1,
-    "REJECTED": 2,
-    "ASSESSMENT": 3,
-    "INTERVIEW": 4,
-    "FINAL_ROUND": 5,
-    "OFFERED": 6,
-    "ACCEPTED": 7,
-    "WITHDRAWN": 7,
+    "ASSESSMENT": 1,
+    "INTERVIEW": 2,
+    "FINAL_ROUND": 3,
+    "OFFERED": 4,
+    "ACCEPTED": 5,
+    "REJECTED": 5,
+    "WITHDRAWN": 5,
+    "GHOSTED": 5,
 }
 
 SANKY_STAGE_RANK = {

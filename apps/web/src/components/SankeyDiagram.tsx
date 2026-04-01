@@ -31,14 +31,14 @@ import {
 
 const STAGE_FALLBACK_COLUMNS: Record<string, number> = {
   APPLIED: 0,
-  GHOSTED: 1,
-  REJECTED: 2,
-  ASSESSMENT: 3,
-  INTERVIEW: 4,
-  FINAL_ROUND: 5,
-  OFFERED: 6,
-  ACCEPTED: 7,
-  WITHDRAWN: 7,
+  ASSESSMENT: 1,
+  INTERVIEW: 2,
+  FINAL_ROUND: 3,
+  OFFERED: 4,
+  ACCEPTED: 5,
+  REJECTED: 5,
+  WITHDRAWN: 5,
+  GHOSTED: 5,
 };
 
 const STAGE_FALLBACK_KINDS: Record<string, string> = {
@@ -55,12 +55,12 @@ const STAGE_FALLBACK_KINDS: Record<string, string> = {
 
 const STAGE_FALLBACK_ORDER: Record<string, number> = {
   APPLIED: 0,
-  GHOSTED: 1,
-  REJECTED: 2,
-  ASSESSMENT: 3,
-  INTERVIEW: 4,
-  FINAL_ROUND: 5,
-  OFFERED: 6,
+  ASSESSMENT: 1,
+  INTERVIEW: 2,
+  FINAL_ROUND: 3,
+  OFFERED: 4,
+  REJECTED: 5,
+  GHOSTED: 6,
   ACCEPTED: 7,
   WITHDRAWN: 8,
 };
@@ -74,7 +74,7 @@ const PRESET_OPTIONS: Array<{
   { id: "last90", label: "Last 90 days" },
 ];
 
-const SANKEY_CACHE_SCHEMA_VERSION = 3;
+const SANKEY_CACHE_SCHEMA_VERSION = 4;
 
 const NODE_PALETTE: Record<
   string,
@@ -521,11 +521,11 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
   const data = cachedSnapshot?.payload ?? null;
 
   const layout = useMemo(() => {
-    const chartWidth = clamp(containerWidth > 0 ? containerWidth - 32 : 960, 320, 1280);
+    const chartWidth = clamp(containerWidth > 0 ? containerWidth - 32 : 960, 320, 1120);
     const chartHeight = clamp(
-      containerWidth < 640 ? 340 : containerWidth < 1024 ? 440 : 520,
-      320,
-      560
+      containerWidth < 640 ? 320 : containerWidth < 1024 ? 400 : 460,
+      300,
+      500
     );
 
     if (!data?.nodes?.length) {
@@ -537,8 +537,8 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
       };
     }
 
-    const nodeWidth = chartWidth < 640 ? 14 : 18;
-    const nodePadding = chartWidth < 640 ? 20 : 26;
+    const nodeWidth = chartWidth < 640 ? 12 : chartWidth < 900 ? 14 : 16;
+    const nodePadding = chartWidth < 640 ? 16 : chartWidth < 900 ? 18 : 22;
 
     const nodes: LayoutNodeDatum[] = data.nodes.map((node) => {
       const stageKey = resolveStageKey(node);
@@ -582,8 +582,8 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
       .nodeWidth(nodeWidth)
       .nodePadding(nodePadding)
       .extent([
-        [20, 24],
-        [chartWidth - 20, chartHeight - 24],
+        [16, 20],
+        [chartWidth - 16, chartHeight - 20],
       ])({
         nodes: nodes.map((node) => ({ ...node })),
         links: links.map((link) => ({ ...link })),
