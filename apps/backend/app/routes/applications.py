@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from app.core.auth import get_current_user
+from app.models.api.application_event import ManualApplicationEventCreate
 from app.models.api.application_source import SankeyGenerateRequest, SankeyResponse
 from app.services.base_service import ServiceOperationError
 from app.services.supabase.application_source_service import application_source_service
@@ -117,6 +118,20 @@ async def clear_final_round(
     try:
         return await application_source_service.toggle_final_round(
             current_user_id, application_id, False
+        )
+    except ServiceOperationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/applications/{application_id}/events")
+async def create_manual_application_event(
+    application_id: str,
+    request: ManualApplicationEventCreate,
+    current_user_id: str = Depends(get_current_user),
+):
+    try:
+        return await application_source_service.create_manual_event(
+            current_user_id, application_id, request
         )
     except ServiceOperationError as e:
         raise HTTPException(status_code=400, detail=str(e))

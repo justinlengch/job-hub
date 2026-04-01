@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
 from app.models.api.application_event import ApplicationEventType
+from app.models.api.application_event import ManualApplicationEventCreate
 from app.models.api.application_source import (
     ApplicationMergeStatus,
     ApplicationSourceType,
@@ -1283,7 +1284,7 @@ class ApplicationSourceService(BaseService):
                 event_type=ApplicationEventType.FINAL_ROUND,
                 event_date=self._utc_now(),
                 description="Marked as final round",
-                source_type="MANUAL",
+                source_type=None,
                 source_id=None,
             )
             await self._update_application(
@@ -1306,6 +1307,42 @@ class ApplicationSourceService(BaseService):
                 .execute()
             )
         return {"application_id": application_id, "is_final_round": False, "event_id": None}
+
+    async def create_manual_event(
+        self,
+        user_id: str,
+        application_id: str,
+        payload: ManualApplicationEventCreate,
+    ) -> Dict[str, Any]:
+        application = await self._fetch_application(application_id, user_id)
+        if not application:
+            raise ServiceOperationError("Application not found")
+
+        event = await self._create_event(
+            application_id=application_id,
+            user_id=user_id,
+            event_type=payload.event_type,
+            event_date=payload.event_date,
+            description=payload.description,
+            source_type=None,
+            source_id=None,
+        )
+
+        status = self._status_from_event_type(payload.event_type)
+        updates: Dict[str, Any] = {}
+        if status and self._stage_rank(self._stage_from_status(status.value)) >= self._stage_rank(
+            self._stage_from_status(application.get("status") or ApplicationStatus.APPLIED.value)
+        ):
+            updates["status"] = status.value
+
+        current_last_updated = self._parse_datetime(application.get("last_updated_at"))
+        if not current_last_updated or payload.event_date >= current_last_updated:
+            updates["last_updated_at"] = payload.event_date.isoformat()
+
+        if updates:
+            await self._update_application(application_id, user_id, updates)
+
+        return event
 
     @staticmethod
     def _stage_from_event(event_type: str) -> Optional[str]:
@@ -1340,6 +1377,28 @@ class ApplicationSourceService(BaseService):
             ApplicationStatus.WITHDRAWN.value: "WITHDRAWN",
         }
         return mapping.get(status, "APPLIED")
+
+    @staticmethod
+    def _status_from_event_type(event_type: ApplicationEventType | str) -> Optional[ApplicationStatus]:
+        value = event_type.value if isinstance(event_type, ApplicationEventType) else event_type
+        mapping = {
+            ApplicationEventType.APPLICATION_SUBMITTED.value: ApplicationStatus.APPLIED,
+            ApplicationEventType.APPLICATION_RECEIVED.value: ApplicationStatus.APPLIED,
+            ApplicationEventType.APPLICATION_VIEWED.value: ApplicationStatus.APPLIED,
+            ApplicationEventType.APPLICATION_REVIEWED.value: ApplicationStatus.APPLIED,
+            ApplicationEventType.ASSESSMENT_RECEIVED.value: ApplicationStatus.ASSESSMENT,
+            ApplicationEventType.ASSESSMENT_COMPLETED.value: ApplicationStatus.ASSESSMENT,
+            ApplicationEventType.INTERVIEW_SCHEDULED.value: ApplicationStatus.INTERVIEW,
+            ApplicationEventType.INTERVIEW_COMPLETED.value: ApplicationStatus.INTERVIEW,
+            ApplicationEventType.FINAL_ROUND.value: ApplicationStatus.INTERVIEW,
+            ApplicationEventType.REFERENCE_REQUESTED.value: ApplicationStatus.INTERVIEW,
+            ApplicationEventType.OFFER_RECEIVED.value: ApplicationStatus.OFFERED,
+            ApplicationEventType.OFFER_ACCEPTED.value: ApplicationStatus.ACCEPTED,
+            ApplicationEventType.OFFER_DECLINED.value: ApplicationStatus.WITHDRAWN,
+            ApplicationEventType.APPLICATION_REJECTED.value: ApplicationStatus.REJECTED,
+            ApplicationEventType.APPLICATION_WITHDRAWN.value: ApplicationStatus.WITHDRAWN,
+        }
+        return mapping.get(value)
 
     @staticmethod
     def _is_terminal_stage(stage: str) -> bool:

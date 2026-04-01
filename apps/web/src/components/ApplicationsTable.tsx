@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { JobApplication, ApplicationEvent } from "@/types/application";
+import { Textarea } from "@/components/ui/textarea";
+import { ApplicationEventType, JobApplication, ApplicationEvent } from "@/types/application";
 import { emailRefsService, buildGmailUrlWithPrefs, applicationEventsService, jobApplicationsService } from "@/services/supabase";
 import { apiService } from "@/services/api";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ import {
   Calendar,
   ExternalLink,
   Trash,
+  Plus,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -42,6 +44,24 @@ const statusColors = {
   WITHDRAWN: "bg-gray-100 text-gray-800",
 };
 
+const manualEventTypeOptions: Array<{ value: ApplicationEventType; label: string }> = [
+  { value: "APPLICATION_SUBMITTED", label: "Applied" },
+  { value: "APPLICATION_RECEIVED", label: "Application Received" },
+  { value: "APPLICATION_VIEWED", label: "Application Viewed" },
+  { value: "APPLICATION_REVIEWED", label: "Application Reviewed" },
+  { value: "ASSESSMENT_RECEIVED", label: "Assessment Received" },
+  { value: "ASSESSMENT_COMPLETED", label: "Assessment Completed" },
+  { value: "INTERVIEW_SCHEDULED", label: "Interview Scheduled" },
+  { value: "INTERVIEW_COMPLETED", label: "Interview Completed" },
+  { value: "FINAL_ROUND", label: "Final Round" },
+  { value: "REFERENCE_REQUESTED", label: "Reference Requested" },
+  { value: "OFFER_RECEIVED", label: "Offer Received" },
+  { value: "OFFER_ACCEPTED", label: "Offer Accepted" },
+  { value: "OFFER_DECLINED", label: "Offer Declined" },
+  { value: "APPLICATION_REJECTED", label: "Rejected" },
+  { value: "APPLICATION_WITHDRAWN", label: "Withdrawn" },
+];
+
 const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsTableProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] =
@@ -54,6 +74,16 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
   const [appEvents, setAppEvents] = useState<ApplicationEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [updatingFinalRound, setUpdatingFinalRound] = useState(false);
+  const [addingEvent, setAddingEvent] = useState(false);
+  const [manualEventForm, setManualEventForm] = useState<{
+    event_type: ApplicationEventType;
+    event_date: string;
+    description: string;
+  }>({
+    event_type: "APPLICATION_RECEIVED",
+    event_date: "",
+    description: "",
+  });
   const itemsPerPage = 10;
 
   const [localApps, setLocalApps] = useState<JobApplication[]>(applications);
@@ -161,6 +191,11 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
     setSelectedApp(application);
     setDetailsOpen(true);
     setEventsLoading(true);
+    setManualEventForm({
+      event_type: "APPLICATION_RECEIVED",
+      event_date: new Date().toISOString().slice(0, 16),
+      description: "",
+    });
     try {
       const appId = application.id;
       const list = await applicationEventsService.getEventsWithEmailRefsByApplicationId(
@@ -213,6 +248,32 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
     } finally {
       setDeletingId(null);
       setDeleteDialogId(null);
+    }
+  };
+
+  const handleCreateManualEvent = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!selectedApp || !manualEventForm.event_date) return;
+
+    setAddingEvent(true);
+    try {
+      await apiService.createManualApplicationEvent(selectedApp.id, {
+        event_type: manualEventForm.event_type,
+        event_date: new Date(manualEventForm.event_date).toISOString(),
+        description: manualEventForm.description || undefined,
+      });
+      toast.success("Event added");
+      const refreshedApp = await jobApplicationsService.getApplicationById(selectedApp.id);
+      if (refreshedApp) {
+        setSelectedApp(refreshedApp);
+        setLocalApps((prev) => prev.map((app) => (app.id === refreshedApp.id ? refreshedApp : app)));
+      }
+      await handleOpenDetails(refreshedApp || selectedApp);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to add event";
+      toast.error(message);
+    } finally {
+      setAddingEvent(false);
     }
   };
 
@@ -433,6 +494,75 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
             </div>
           </DialogHeader>
           <div className="max-h-[calc(85vh-120px)] overflow-y-auto px-6 py-4">
+            {selectedApp && (
+              <form
+                className="mb-4 rounded-xl border bg-slate-50 p-4"
+                onSubmit={handleCreateManualEvent}
+              >
+                <div className="mb-3 flex items-center gap-2">
+                  <Plus className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-semibold">Add Manual Event</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <Label htmlFor="manual-event-type">Event Type</Label>
+                    <select
+                      id="manual-event-type"
+                      className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={manualEventForm.event_type}
+                      onChange={(event) =>
+                        setManualEventForm((current) => ({
+                          ...current,
+                          event_type: event.target.value as ApplicationEventType,
+                        }))
+                      }
+                    >
+                      {manualEventTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="manual-event-date">Event Date</Label>
+                    <Input
+                      id="manual-event-date"
+                      type="datetime-local"
+                      className="mt-1"
+                      value={manualEventForm.event_date}
+                      onChange={(event) =>
+                        setManualEventForm((current) => ({
+                          ...current,
+                          event_date: event.target.value,
+                        }))
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label htmlFor="manual-event-description">Description</Label>
+                    <Textarea
+                      id="manual-event-description"
+                      className="mt-1 min-h-[88px]"
+                      placeholder="Optional note about the event"
+                      value={manualEventForm.description}
+                      onChange={(event) =>
+                        setManualEventForm((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <Button type="submit" size="sm" disabled={addingEvent}>
+                    {addingEvent ? "Adding..." : "Add Event"}
+                  </Button>
+                </div>
+              </form>
+            )}
             {eventsLoading ? (
               <p className="text-sm text-muted-foreground">Loading events...</p>
             ) : appEvents.length ? (

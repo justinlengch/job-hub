@@ -68,3 +68,13 @@ class ApplicationEventRead(ApplicationEventCreate):
     created_at: datetime = Field(
         ..., description="Timestamp when the record was created"
     )
+
+
+class ManualApplicationEventCreate(BaseModel):
+    event_type: ApplicationEventType = Field(
+        ..., description="Type of the manual application event"
+    )
+    event_date: datetime = Field(..., description="Date/time when the event occurred")
+    description: Optional[str] = Field(
+        None, description="Optional description of the event"
+    )

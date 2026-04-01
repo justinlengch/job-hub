@@ -4,6 +4,7 @@ import {
   EmailParseResponse,
   FinalRoundToggleResponse,
   LinkedInImportResult,
+  ManualApplicationEventCreate,
   ReviewQueueResponse,
   SankeySnapshotFilters,
   SankeyResponse,
@@ -144,5 +145,15 @@ export const apiService = {
         method: enabled ? "POST" : "DELETE",
       }
     );
+  },
+
+  async createManualApplicationEvent(
+    applicationId: string,
+    payload: ManualApplicationEventCreate
+  ): Promise<void> {
+    return requestJson<void>(`/api/applications/${applicationId}/events`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 };

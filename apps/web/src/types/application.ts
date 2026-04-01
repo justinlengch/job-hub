@@ -238,6 +238,12 @@ export interface FinalRoundToggleResponse {
   event_id?: string;
 }
 
+export interface ManualApplicationEventCreate {
+  event_type: ApplicationEventType;
+  event_date: string;
+  description?: string;
+}
+
 // Email parsing types for backend API
 export interface EmailParseRequest {
   email_id: string;
