@@ -85,6 +85,11 @@ class ReviewActionResponse(BaseModel):
     merge_status: ApplicationMergeStatus
 
 
+class SankeyGenerateRequest(BaseModel):
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
 class SankeyNodeKind(str, Enum):
     ROOT = "root"
     PROGRESS = "progress"

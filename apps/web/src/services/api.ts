@@ -5,6 +5,7 @@ import {
   FinalRoundToggleResponse,
   LinkedInImportResult,
   ReviewQueueResponse,
+  SankeySnapshotFilters,
   SankeyResponse,
 } from "@/types/application";
 
@@ -124,9 +125,12 @@ export const apiService = {
     );
   },
 
-  async generateSankeyData(): Promise<SankeyResponse> {
+  async generateSankeyData(
+    filters?: Pick<SankeySnapshotFilters, "start_date" | "end_date">
+  ): Promise<SankeyResponse> {
     return requestJson<SankeyResponse>("/api/analytics/sankey/generate", {
       method: "POST",
+      body: JSON.stringify(filters ?? {}),
     });
   },
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { sankey as createSankey, sankeyLinkHorizontal } from "d3-sankey";
 import { toast } from "sonner";
 import { apiService } from "@/services/api";
 import {
@@ -6,6 +7,7 @@ import {
   SankeyNode,
   SankeyResponse,
   SankeySnapshotCache,
+  SankeySnapshotFilters,
 } from "@/types/application";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,8 +18,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   ArrowRight,
+  CalendarRange,
+  Download,
   Loader2,
   RefreshCw,
   SlidersHorizontal,
@@ -59,6 +64,17 @@ const STAGE_FALLBACK_ORDER: Record<string, number> = {
   ACCEPTED: 7,
   WITHDRAWN: 8,
 };
+
+const PRESET_OPTIONS: Array<{
+  id: SankeySnapshotFilters["preset"];
+  label: string;
+}> = [
+  { id: "all", label: "All time" },
+  { id: "last30", label: "Last 30 days" },
+  { id: "last90", label: "Last 90 days" },
+];
+
+const SANKEY_CACHE_SCHEMA_VERSION = 2;
 
 const NODE_PALETTE: Record<
   string,
@@ -125,31 +141,34 @@ const FILTERABLE_STAGES = new Set([
   "WITHDRAWN",
 ]);
 
-const SANKEY_CACHE_SCHEMA_VERSION = 1;
-
-type LayoutNode = SankeyNode & {
+type LayoutNodeDatum = SankeyNode & {
   stageKey: string;
   kindKey: string;
   columnIndex: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  incoming: number;
-  outgoing: number;
   palette: (typeof NODE_PALETTE)["fallback"];
   labelLines: string[];
+  sortIndex: number;
 };
 
-type LayoutLink = SankeyLink & {
+type LayoutLinkDatum = SankeyLink & {
   key: string;
   kindKey: string;
-  sourceNode: LayoutNode;
-  targetNode: LayoutNode;
-  thickness: number;
-  sourceY: number;
-  targetY: number;
-  palette: (typeof NODE_PALETTE)["fallback"];
+};
+
+type LayoutNode = LayoutNodeDatum & {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  value: number;
+};
+
+type LayoutLink = LayoutLinkDatum & {
+  width: number;
+  y0: number;
+  y1: number;
+  source: LayoutNode;
+  target: LayoutNode;
 };
 
 interface SankeyDiagramProps {
@@ -195,12 +214,79 @@ const kindPriority = (kindKey: string) => {
 const stageOrderValue = (stageKey: string) =>
   STAGE_FALLBACK_ORDER[stageKey] ?? 99;
 
-const getSankeyCacheKey = (userId: string) => `jobhub:sankey:v1:${userId}`;
+const toLocalDateInputValue = (date: Date) => {
+  const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return adjusted.toISOString().slice(0, 10);
+};
 
-const readCachedSnapshot = (userId: string): SankeySnapshotCache | null => {
+const getPresetRange = (
+  preset: Exclude<SankeySnapshotFilters["preset"], "custom">
+): SankeySnapshotFilters => {
+  if (preset === "all") {
+    return { preset: "all" };
+  }
+
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(end.getDate() - (preset === "last30" ? 29 : 89));
+
+  return {
+    preset,
+    start_date: toLocalDateInputValue(start),
+    end_date: toLocalDateInputValue(end),
+  };
+};
+
+const normalizeFilters = (
+  filters: SankeySnapshotFilters
+): SankeySnapshotFilters => {
+  if (filters.preset === "all") {
+    return { preset: "all" };
+  }
+
+  const start_date = filters.start_date || undefined;
+  const end_date = filters.end_date || undefined;
+  const preset =
+    filters.preset === "last30" || filters.preset === "last90"
+      ? filters.preset
+      : "custom";
+
+  if (!start_date && !end_date) {
+    return { preset: "all" };
+  }
+
+  return { preset, start_date, end_date };
+};
+
+const getFilterKey = (filters: SankeySnapshotFilters) => {
+  const normalized = normalizeFilters(filters);
+  if (normalized.preset === "all") return "all";
+  return `start=${normalized.start_date || "none"}|end=${normalized.end_date || "none"}`;
+};
+
+const getRangeLabel = (filters: SankeySnapshotFilters) => {
+  const normalized = normalizeFilters(filters);
+  if (normalized.preset === "all") return "All time";
+  if (normalized.preset === "last30") return "Last 30 days";
+  if (normalized.preset === "last90") return "Last 90 days";
+  if (normalized.start_date && normalized.end_date) {
+    return `${normalized.start_date} to ${normalized.end_date}`;
+  }
+  if (normalized.start_date) return `From ${normalized.start_date}`;
+  if (normalized.end_date) return `Until ${normalized.end_date}`;
+  return "Custom range";
+};
+
+const getSankeyCacheKey = (userId: string, filters: SankeySnapshotFilters) =>
+  `jobhub:sankey:v2:${userId}:${getFilterKey(filters)}`;
+
+const readCachedSnapshot = (
+  userId: string,
+  filters: SankeySnapshotFilters
+): SankeySnapshotCache | null => {
   if (typeof window === "undefined") return null;
 
-  const raw = window.localStorage.getItem(getSankeyCacheKey(userId));
+  const raw = window.localStorage.getItem(getSankeyCacheKey(userId, filters));
   if (!raw) return null;
 
   try {
@@ -208,36 +294,44 @@ const readCachedSnapshot = (userId: string): SankeySnapshotCache | null => {
     if (
       parsed.schema_version !== SANKEY_CACHE_SCHEMA_VERSION ||
       !parsed.generated_at ||
-      !parsed.payload
+      !parsed.payload ||
+      !parsed.filters
     ) {
-      window.localStorage.removeItem(getSankeyCacheKey(userId));
+      window.localStorage.removeItem(getSankeyCacheKey(userId, filters));
       return null;
     }
     return parsed as SankeySnapshotCache;
   } catch {
-    window.localStorage.removeItem(getSankeyCacheKey(userId));
+    window.localStorage.removeItem(getSankeyCacheKey(userId, filters));
     return null;
   }
 };
 
 const writeCachedSnapshot = (
   userId: string,
+  filters: SankeySnapshotFilters,
   payload: SankeyResponse
 ): SankeySnapshotCache | null => {
   if (typeof window === "undefined") return null;
 
+  const normalized = normalizeFilters(filters);
   const snapshot: SankeySnapshotCache = {
     generated_at: new Date().toISOString(),
     schema_version: SANKEY_CACHE_SCHEMA_VERSION,
+    filters: normalized,
     payload,
   };
-  window.localStorage.setItem(getSankeyCacheKey(userId), JSON.stringify(snapshot));
+
+  window.localStorage.setItem(
+    getSankeyCacheKey(userId, normalized),
+    JSON.stringify(snapshot)
+  );
   return snapshot;
 };
 
-const clearCachedSnapshot = (userId: string) => {
+const clearCachedSnapshot = (userId: string, filters: SankeySnapshotFilters) => {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(getSankeyCacheKey(userId));
+  window.localStorage.removeItem(getSankeyCacheKey(userId, filters));
 };
 
 const resolveStageKey = (node: SankeyNode) =>
@@ -262,23 +356,13 @@ const resolveColumnIndex = (node: SankeyNode) => {
   if (typeof node.column === "number" && Number.isFinite(node.column)) {
     return node.column;
   }
-
-  const stageKey = resolveStageKey(node);
-  return STAGE_FALLBACK_COLUMNS[stageKey] ?? 2;
+  return STAGE_FALLBACK_COLUMNS[resolveStageKey(node)] ?? 2;
 };
 
 const resolvePalette = (kindKey: string, stageKey: string) => {
-  if (kindKey in NODE_PALETTE) {
-    return NODE_PALETTE[kindKey];
-  }
-
-  if (stageKey in STAGE_FALLBACK_KINDS) {
-    const mapped = STAGE_FALLBACK_KINDS[stageKey];
-    if (mapped in NODE_PALETTE) {
-      return NODE_PALETTE[mapped];
-    }
-  }
-
+  if (kindKey in NODE_PALETTE) return NODE_PALETTE[kindKey];
+  const mapped = STAGE_FALLBACK_KINDS[stageKey];
+  if (mapped && mapped in NODE_PALETTE) return NODE_PALETTE[mapped];
   return NODE_PALETTE.fallback;
 };
 
@@ -299,10 +383,7 @@ const wrapLabel = (label: string, maxCharsPerLine: number) => {
     current = next;
   }
 
-  if (current) {
-    lines.push(current);
-  }
-
+  if (current) lines.push(current);
   return lines.length ? lines.slice(0, 2) : [label];
 };
 
@@ -310,17 +391,31 @@ const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
 const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [filters, setFilters] = useState<SankeySnapshotFilters>({ preset: "all" });
   const [cachedSnapshot, setCachedSnapshot] = useState<SankeySnapshotCache | null>(
     null
   );
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [hoveredLinkKey, setHoveredLinkKey] = useState<string | null>(null);
   const [selectedStageKey, setSelectedStageKey] = useState<string | null>(null);
   const [selectedLinkKey, setSelectedLinkKey] = useState<string | null>(null);
+
+  const normalizedFilters = useMemo(() => normalizeFilters(filters), [filters]);
+  const currentRangeLabel = useMemo(
+    () => getRangeLabel(normalizedFilters),
+    [normalizedFilters]
+  );
+  const hasInvalidDateRange = Boolean(
+    normalizedFilters.start_date &&
+      normalizedFilters.end_date &&
+      normalizedFilters.start_date > normalizedFilters.end_date
+  );
 
   useEffect(() => {
     const node = containerRef.current;
@@ -331,7 +426,6 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
 
     const observer = new ResizeObserver(update);
     observer.observe(node);
-
     return () => observer.disconnect();
   }, []);
 
@@ -342,247 +436,86 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
     setHoveredLinkKey(null);
     setSelectedStageKey(null);
     setSelectedLinkKey(null);
-    setCachedSnapshot(readCachedSnapshot(userId));
+    setCachedSnapshot(readCachedSnapshot(userId, normalizedFilters));
     setLoading(false);
-  }, [userId]);
+  }, [normalizedFilters, userId]);
 
   const data = cachedSnapshot?.payload ?? null;
 
   const layout = useMemo(() => {
-    const baseWidth = Math.max(containerWidth || 1024, 900);
-    const leftPad = 28;
-    const rightPad = 28;
-    const topPad = 24;
-    const bottomPad = 28;
-    const columnGap = 84;
-    const rowGap = 18;
+    const chartWidth = clamp(containerWidth > 0 ? containerWidth - 32 : 960, 320, 1280);
+    const chartHeight = clamp(
+      containerWidth < 640 ? 340 : containerWidth < 1024 ? 440 : 520,
+      320,
+      560
+    );
 
     if (!data?.nodes?.length) {
       return {
-        chartHeight: 460,
-        chartWidth: baseWidth,
+        chartWidth,
+        chartHeight,
         nodes: [] as LayoutNode[],
         links: [] as LayoutLink[],
       };
     }
 
-    const nodesByColumn = new Map<number, LayoutNode[]>();
-    const stageNodeMap = new Map<string, LayoutNode>();
+    const nodeWidth = chartWidth < 640 ? 14 : 18;
+    const nodePadding = chartWidth < 640 ? 20 : 26;
 
-    for (const node of data.nodes) {
+    const nodes: LayoutNodeDatum[] = data.nodes.map((node) => {
       const stageKey = resolveStageKey(node);
       const kindKey = resolveKindKey(node);
       const columnIndex = resolveColumnIndex(node);
-      const label = displayLabelForStage(stageKey);
-      const palette = resolvePalette(kindKey, stageKey);
-      const nodeWidth =
-        columnIndex === 0
-          ? 210
-          : kindKey === "ghosted" || kindKey === "rejected"
-            ? 176
-            : 188;
-      const baseHeight = kindKey === "root" ? 96 : kindKey === "ghosted" ? 86 : 82;
-      const labelLines = wrapLabel(label, kindKey === "root" ? 16 : 14);
-      const height = Math.max(baseHeight, 46 + labelLines.length * 16 + 12);
-      const layoutNode: LayoutNode = {
+      return {
         ...node,
         stageKey,
         kindKey,
         columnIndex,
-        x: 0,
-        y: 0,
-        width: nodeWidth,
-        height,
-        incoming: 0,
-        outgoing: 0,
-        palette,
-        labelLines,
+        palette: resolvePalette(kindKey, stageKey),
+        labelLines: wrapLabel(
+          displayLabelForStage(stageKey),
+          chartWidth < 640 ? 11 : 15
+        ),
+        sortIndex:
+          kindPriority(kindKey) * 100 +
+          stageOrderValue(stageKey) * 10 -
+          Math.min(node.count, 9),
       };
-
-      const bucket = nodesByColumn.get(columnIndex) || [];
-      bucket.push(layoutNode);
-      nodesByColumn.set(columnIndex, bucket);
-      stageNodeMap.set(stageKey, layoutNode);
-      stageNodeMap.set(node.id, layoutNode);
-      stageNodeMap.set((node.label || "").toUpperCase(), layoutNode);
-    }
-
-    const columns = Array.from(nodesByColumn.keys()).sort((a, b) => a - b);
-
-    for (const column of columns) {
-      const bucket = nodesByColumn.get(column) || [];
-      bucket.sort(
-        (a, b) =>
-          kindPriority(a.kindKey) - kindPriority(b.kindKey) ||
-          stageOrderValue(a.stageKey) - stageOrderValue(b.stageKey) ||
-          b.count - a.count ||
-          a.label.localeCompare(b.label)
-      );
-    }
-
-    const columnWidths = columns.map((column) => {
-      const bucket = nodesByColumn.get(column) || [];
-      return Math.max(...bucket.map((node) => node.width), 176);
     });
-    const columnHeights = columns.map((column) => {
-      const bucket = nodesByColumn.get(column) || [];
-      return (
-        bucket.reduce((sum, node) => sum + node.height, 0) +
-        Math.max(0, bucket.length - 1) * rowGap
-      );
-    });
-    const chartHeight = Math.max(
-      460,
-      topPad + bottomPad + Math.max(...columnHeights, 0) + 40
-    );
-    const chartWidth = Math.max(
-      baseWidth,
-      leftPad +
-        rightPad +
-        columnWidths.reduce((sum, width) => sum + width, 0) +
-        Math.max(0, columns.length - 1) * columnGap
-    );
 
-    let cursorX = leftPad;
-    columns.forEach((column, index) => {
-      const bucket = nodesByColumn.get(column) || [];
-      const columnWidth = columnWidths[index];
-      const columnHeight = columnHeights[index];
-      const yStart =
-        topPad +
-        Math.max(0, (chartHeight - topPad - bottomPad - columnHeight) / 2);
-      let cursorY = yStart;
+    const links: LayoutLinkDatum[] = data.links.map((link) => ({
+      ...link,
+      key: `${link.source}__${link.target}`,
+      kindKey:
+        (link.kind ||
+          nodes.find((node) => node.id === link.target)?.kindKey ||
+          "progress")
+          .toString()
+          .toLowerCase(),
+    }));
 
-      bucket.forEach((node) => {
-        node.x = cursorX + (columnWidth - node.width) / 2;
-        node.y = cursorY;
-        cursorY += node.height + rowGap;
+    const graph = createSankey<LayoutNodeDatum, LayoutLinkDatum>()
+      .nodeId((node) => node.id)
+      .nodeAlign((node, totalColumns) =>
+        Math.max(0, Math.min(node.columnIndex, totalColumns - 1))
+      )
+      .nodeSort((a, b) => a.sortIndex - b.sortIndex || b.count - a.count)
+      .linkSort((a, b) => b.value - a.value)
+      .nodeWidth(nodeWidth)
+      .nodePadding(nodePadding)
+      .extent([
+        [20, 24],
+        [chartWidth - 20, chartHeight - 24],
+      ])({
+        nodes: nodes.map((node) => ({ ...node })),
+        links: links.map((link) => ({ ...link })),
       });
 
-      cursorX += columnWidth + columnGap;
-    });
-
-    const linkItems: LayoutLink[] = data.links
-      .map((link) => {
-        const sourceKey = normalizeStageKey(link.source);
-        const targetKey = normalizeStageKey(link.target);
-        const sourceNode =
-          stageNodeMap.get(sourceKey) ||
-          stageNodeMap.get(link.source) ||
-          (data.nodes.length
-            ? stageNodeMap.get(resolveStageKey(data.nodes[0]))
-            : undefined);
-        const targetNode =
-          stageNodeMap.get(targetKey) ||
-          stageNodeMap.get(link.target) ||
-          (data.nodes.length
-            ? stageNodeMap.get(resolveStageKey(data.nodes[data.nodes.length - 1]))
-            : undefined);
-
-        if (!sourceNode || !targetNode) return null;
-
-        const kindKey = (
-          link.kind || targetNode.kindKey || sourceNode.kindKey || "progress"
-        )
-          .toString()
-          .toLowerCase();
-        const palette = resolvePalette(kindKey, targetNode.stageKey);
-        return {
-          ...link,
-          key: `${link.source}__${link.target}`,
-          kindKey,
-          sourceNode,
-          targetNode,
-          thickness: 0,
-          sourceY: 0,
-          targetY: 0,
-          palette,
-        };
-      })
-      .filter(Boolean) as LayoutLink[];
-
-    const maxValue = Math.max(
-      1,
-      ...linkItems.map((link) => link.value),
-      ...data.nodes.map((node) => node.count)
-    );
-    const flowUnit = clamp(
-      (chartHeight - topPad - bottomPad - 72) / maxValue,
-      3,
-      18
-    );
-
-    const outgoingByNode = new Map<string, LayoutLink[]>();
-    const incomingByNode = new Map<string, LayoutLink[]>();
-    for (const link of linkItems) {
-      const sourceList = outgoingByNode.get(link.sourceNode.id) || [];
-      sourceList.push(link);
-      outgoingByNode.set(link.sourceNode.id, sourceList);
-
-      const targetList = incomingByNode.get(link.targetNode.id) || [];
-      targetList.push(link);
-      incomingByNode.set(link.targetNode.id, targetList);
-    }
-
-    const sortLinks = (a: LayoutLink, b: LayoutLink) =>
-      a.targetNode.columnIndex - b.targetNode.columnIndex ||
-      kindPriority(a.targetNode.kindKey) - kindPriority(b.targetNode.kindKey) ||
-      b.value - a.value ||
-      a.targetNode.label.localeCompare(b.targetNode.label);
-
-    for (const node of stageNodeMap.values()) {
-      const outgoing = (outgoingByNode.get(node.id) || []).sort(sortLinks);
-      const incoming = (incomingByNode.get(node.id) || []).sort(sortLinks);
-      node.outgoing = outgoing.reduce(
-        (sum, link) => sum + Math.max(3, link.value * flowUnit),
-        0
-      );
-      node.incoming = incoming.reduce(
-        (sum, link) => sum + Math.max(3, link.value * flowUnit),
-        0
-      );
-    }
-
-    for (const node of stageNodeMap.values()) {
-      const outgoing = (outgoingByNode.get(node.id) || []).sort(sortLinks);
-      const totalThickness = outgoing.reduce(
-        (sum, link) => sum + Math.max(3, link.value * flowUnit),
-        0
-      );
-      let offset = -totalThickness / 2;
-      for (const link of outgoing) {
-        const thickness = Math.max(3, link.value * flowUnit);
-        link.thickness = thickness;
-        link.sourceY = node.y + node.height / 2 + offset + thickness / 2;
-        offset += thickness;
-      }
-    }
-
-    for (const node of stageNodeMap.values()) {
-      const incoming = (incomingByNode.get(node.id) || []).sort(sortLinks);
-      const totalThickness = incoming.reduce(
-        (sum, link) => sum + Math.max(3, link.value * flowUnit),
-        0
-      );
-      let offset = -totalThickness / 2;
-      for (const link of incoming) {
-        const thickness = Math.max(3, link.value * flowUnit);
-        link.targetY = node.y + node.height / 2 + offset + thickness / 2;
-        offset += thickness;
-      }
-    }
-
-    const uniqueNodes = Array.from(
-      new Map(
-        Array.from(stageNodeMap.values()).map((node) => [node.id, node] as const)
-      ).values()
-    );
-
     return {
-      chartHeight,
       chartWidth,
-      nodes: uniqueNodes,
-      links: linkItems,
+      chartHeight,
+      nodes: graph.nodes as LayoutNode[],
+      links: graph.links as LayoutLink[],
     };
   }, [containerWidth, data]);
 
@@ -609,12 +542,38 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
       timeStyle: "short",
     }).format(new Date(value));
 
+  const handlePresetSelect = (preset: "all" | "last30" | "last90") => {
+    setFilters(getPresetRange(preset));
+  };
+
+  const handleCustomDateChange = (
+    field: "start_date" | "end_date",
+    value: string
+  ) => {
+    setFilters((current) =>
+      normalizeFilters({
+        preset: "custom",
+        start_date:
+          field === "start_date" ? value || undefined : current.start_date,
+        end_date: field === "end_date" ? value || undefined : current.end_date,
+      })
+    );
+  };
+
   const handleGenerate = async () => {
+    if (hasInvalidDateRange) {
+      setError("Start date must be before end date.");
+      return;
+    }
+
     setGenerating(true);
     setError(null);
     try {
-      const payload = await apiService.generateSankeyData();
-      const snapshot = writeCachedSnapshot(userId, payload);
+      const payload = await apiService.generateSankeyData({
+        start_date: normalizedFilters.start_date,
+        end_date: normalizedFilters.end_date,
+      });
+      const snapshot = writeCachedSnapshot(userId, normalizedFilters, payload);
       setCachedSnapshot(snapshot);
       resetSelection();
     } catch (err) {
@@ -628,18 +587,86 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
   };
 
   const handleClearSnapshot = () => {
-    clearCachedSnapshot(userId);
+    clearCachedSnapshot(userId, normalizedFilters);
     setCachedSnapshot(null);
     setError(null);
     resetSelection();
+  };
+
+  const handleExport = async () => {
+    if (!svgRef.current || !data) return;
+
+    setExporting(true);
+    try {
+      const serializer = new XMLSerializer();
+      const source = serializer.serializeToString(svgRef.current);
+      const svgMarkup = source.includes("xmlns=")
+        ? source
+        : source.replace(
+            "<svg",
+            '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"'
+          );
+
+      const blob = new Blob([svgMarkup], {
+        type: "image/svg+xml;charset=utf-8",
+      });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("Could not render Sankey export."));
+        img.src = blobUrl;
+      });
+
+      const scale = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = layout.chartWidth * scale;
+      canvas.height = layout.chartHeight * scale;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas export is not available.");
+
+      context.scale(scale, scale);
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, layout.chartWidth, layout.chartHeight);
+      context.drawImage(image, 0, 0, layout.chartWidth, layout.chartHeight);
+
+      const pngBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((result) => {
+          if (result) resolve(result);
+          else reject(new Error("Failed to encode Sankey PNG."));
+        }, "image/png");
+      });
+
+      const downloadUrl = URL.createObjectURL(pngBlob);
+      const link = document.createElement("a");
+      const dateLabel = new Date().toISOString().slice(0, 10);
+      const rangeLabel = getFilterKey(normalizedFilters)
+        .replace(/[^a-zA-Z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      link.href = downloadUrl;
+      link.download = `jobhub-sankey-${rangeLabel || "all"}-${dateLabel}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      URL.revokeObjectURL(downloadUrl);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to export Sankey image";
+      toast.error(message);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const displayPercent = (count: number) =>
     totalApplications ? formatPercent((count / totalApplications) * 100) : "0.0%";
 
   const linkLabel = (link: LayoutLink) => {
-    const source = displayLabelForStage(link.sourceNode.stageKey);
-    const target = displayLabelForStage(link.targetNode.stageKey);
+    const source = displayLabelForStage(link.source.stageKey);
+    const target = displayLabelForStage(link.target.stageKey);
     return `${source} -> ${target}`;
   };
 
@@ -653,11 +680,13 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
 
   const handleLinkSelect = (link: LayoutLink) => {
     setSelectedLinkKey(link.key);
-    setSelectedStageKey(link.targetNode.stageKey);
-    if (FILTERABLE_STAGES.has(link.targetNode.stageKey)) {
-      onStageSelect?.(link.targetNode.stageKey);
+    setSelectedStageKey(link.target.stageKey);
+    if (FILTERABLE_STAGES.has(link.target.stageKey)) {
+      onStageSelect?.(link.target.stageKey);
     }
   };
+
+  const linkPath = sankeyLinkHorizontal<LayoutNode, LayoutLink>();
 
   return (
     <Card className="overflow-hidden border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100 shadow-sm">
@@ -678,6 +707,7 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Badge variant="outline">{currentRangeLabel}</Badge>
             <Badge variant="outline">{totalApplications} applications</Badge>
             <Badge variant="outline">{ghostedCount} ghosted</Badge>
             <Badge variant="outline">{inferredCount} inferred</Badge>
@@ -688,40 +718,80 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {!data ? (
-            <Button onClick={handleGenerate} disabled={generating} className="gap-2">
-              {generating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Generate Sankey
+          {PRESET_OPTIONS.map((preset) => (
+            <Button
+              key={preset.id}
+              variant={normalizedFilters.preset === preset.id ? "default" : "outline"}
+              size="sm"
+              onClick={() =>
+                handlePresetSelect(preset.id as "all" | "last30" | "last90")
+              }
+            >
+              {preset.label}
             </Button>
-          ) : (
-            <>
-              <Button
-                variant="outline"
-                onClick={handleGenerate}
-                disabled={generating}
-                className="gap-2"
-              >
-                {generating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                Refresh Sankey
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={handleClearSnapshot}
-                disabled={generating}
-                className="gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Clear snapshot
-              </Button>
-            </>
+          ))}
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <CalendarRange className="h-4 w-4 text-slate-500" />
+            <Input
+              type="date"
+              value={normalizedFilters.start_date || ""}
+              onChange={(event) =>
+                handleCustomDateChange("start_date", event.target.value)
+              }
+              className="h-8 w-[150px] border-0 px-0 shadow-none focus-visible:ring-0"
+            />
+            <span className="text-sm text-muted-foreground">to</span>
+            <Input
+              type="date"
+              value={normalizedFilters.end_date || ""}
+              onChange={(event) =>
+                handleCustomDateChange("end_date", event.target.value)
+              }
+              className="h-8 w-[150px] border-0 px-0 shadow-none focus-visible:ring-0"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={data ? "outline" : "default"}
+            onClick={handleGenerate}
+            disabled={generating || hasInvalidDateRange}
+            className="gap-2"
+          >
+            {generating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            {data ? "Refresh Sankey" : "Generate Sankey"}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={handleClearSnapshot}
+            disabled={generating || !data}
+            className="gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear snapshot
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={handleExport}
+            disabled={exporting || !data}
+            className="gap-2"
+          >
+            {exporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Export image
+          </Button>
+          {hasInvalidDateRange && (
+            <span className="text-sm text-red-600">
+              Start date must be before end date.
+            </span>
           )}
         </div>
       </CardHeader>
@@ -729,22 +799,33 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
       <CardContent>
         <div
           ref={containerRef}
-          className="relative w-full overflow-x-auto rounded-2xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.08),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.08),_transparent_30%),linear-gradient(180deg,_rgba(255,255,255,0.9),_rgba(248,250,252,0.85))] p-4"
+          className="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.08),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.08),_transparent_30%),linear-gradient(180deg,_rgba(255,255,255,0.9),_rgba(248,250,252,0.85))] p-4"
         >
           {loading ? (
-            <div className="flex h-[520px] items-center justify-center text-sm text-muted-foreground">
+            <div
+              className="flex items-center justify-center text-sm text-muted-foreground"
+              style={{ minHeight: `${layout.chartHeight}px` }}
+            >
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Loading Sankey snapshot...
             </div>
           ) : error ? (
-            <div className="flex h-[520px] items-center justify-center rounded-xl border border-dashed bg-white/85 text-sm text-muted-foreground">
+            <div
+              className="flex items-center justify-center rounded-xl border border-dashed bg-white/85 text-sm text-muted-foreground"
+              style={{ minHeight: `${layout.chartHeight}px` }}
+            >
               {error}
             </div>
           ) : !layout.nodes.length ? (
-            <div className="flex h-[520px] flex-col items-center justify-center gap-4 rounded-xl border border-dashed bg-white/85 px-6 text-center text-sm text-muted-foreground">
+            <div
+              className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed bg-white/85 px-6 text-center text-sm text-muted-foreground"
+              style={{ minHeight: `${layout.chartHeight}px` }}
+            >
               <div className="space-y-1">
-                <p className="font-medium text-foreground">No Sankey snapshot yet.</p>
-                <p>Generate one to capture the current full-dataset branching view.</p>
+                <p className="font-medium text-foreground">
+                  No Sankey snapshot for {currentRangeLabel.toLowerCase()} yet.
+                </p>
+                <p>Generate one to capture this date-scoped branching view.</p>
               </div>
               <Button onClick={handleGenerate} disabled={generating} className="gap-2">
                 {generating ? (
@@ -758,67 +839,60 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
           ) : (
             <>
               <svg
+                ref={svgRef}
                 width={layout.chartWidth}
                 height={layout.chartHeight}
                 viewBox={`0 0 ${layout.chartWidth} ${layout.chartHeight}`}
-                className="overflow-visible"
+                className="mx-auto block max-w-full overflow-visible"
               >
                 <defs>
-                  {layout.links.map((link) => {
-                    const gradientId = `gradient-${link.key}`;
-                    return (
-                      <linearGradient
-                        key={gradientId}
-                        id={gradientId}
-                        x1="0%"
-                        y1="0%"
-                        x2="100%"
-                        y2="0%"
-                      >
-                        <stop
-                          offset="0%"
-                          stopColor={link.sourceNode.palette.stroke}
-                          stopOpacity="0.25"
-                        />
-                        <stop
-                          offset="100%"
-                          stopColor={link.targetNode.palette.stroke}
-                          stopOpacity="0.55"
-                        />
-                      </linearGradient>
-                    );
-                  })}
+                  {layout.links.map((link) => (
+                    <linearGradient
+                      key={`gradient-${link.key}`}
+                      id={`gradient-${link.key}`}
+                      x1={`${link.source.x1}`}
+                      y1="0"
+                      x2={`${link.target.x0}`}
+                      y2="0"
+                      gradientUnits="userSpaceOnUse"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor={link.source.palette.stroke}
+                        stopOpacity="0.24"
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor={link.target.palette.stroke}
+                        stopOpacity="0.56"
+                      />
+                    </linearGradient>
+                  ))}
                 </defs>
 
                 {layout.links.map((link) => {
-                  const x1 = link.sourceNode.x + link.sourceNode.width;
-                  const x2 = link.targetNode.x;
-                  const distance = Math.max(88, Math.abs(x2 - x1));
-                  const bend = Math.min(180, distance * 0.48);
-                  const c1x = x1 + bend;
-                  const c2x = x2 - bend;
                   const isActive =
                     selectedLinkKey === link.key ||
-                    selectedStageKey === link.sourceNode.stageKey ||
-                    selectedStageKey === link.targetNode.stageKey;
+                    selectedStageKey === link.source.stageKey ||
+                    selectedStageKey === link.target.stageKey;
                   const isHovered = hoveredLinkKey === link.key;
                   const isGhosted =
-                    link.kindKey === "ghosted" || link.targetNode.kindKey === "ghosted";
+                    link.kindKey === "ghosted" || link.target.kindKey === "ghosted";
                   const isRejected =
-                    link.kindKey === "rejected" || link.targetNode.kindKey === "rejected";
+                    link.kindKey === "rejected" || link.target.kindKey === "rejected";
                   const opacity = isHovered || isActive ? 0.92 : isGhosted ? 0.28 : isRejected ? 0.42 : 0.38;
 
                   return (
                     <path
                       key={link.key}
-                      d={`M ${x1} ${link.sourceY} C ${c1x} ${link.sourceY}, ${c2x} ${link.targetY}, ${x2} ${link.targetY}`}
+                      d={linkPath(link) || ""}
                       fill="none"
                       stroke={
                         isGhosted || isRejected
-                          ? link.targetNode.palette.stroke
+                          ? link.target.palette.stroke
                           : `url(#gradient-${link.key})`
                       }
-                      strokeWidth={Math.max(3, link.thickness)}
+                      strokeWidth={Math.max(3, link.width || 0)}
                       strokeLinecap="round"
                       opacity={opacity}
                       className="cursor-pointer transition-opacity duration-200"
@@ -833,22 +907,20 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
                 })}
 
                 {layout.nodes.map((node) => {
+                  const nodeWidth = Math.max(12, node.x1 - node.x0);
+                  const nodeHeight = Math.max(14, node.y1 - node.y0);
                   const isActive = selectedStageKey === node.stageKey;
                   const isHovered = hoveredNodeId === node.id;
                   const isGhosted = node.kindKey === "ghosted";
                   const isRejected = node.kindKey === "rejected";
-                  const opacity = isGhosted ? 0.82 : 1;
-                  const shadow =
-                    isHovered || isActive
-                      ? `drop-shadow(0 10px 24px ${node.palette.stroke}2a)`
-                      : "drop-shadow(0 4px 10px rgba(15, 23, 42, 0.08))";
+                  const labelOnRight = node.x1 + 150 < layout.chartWidth;
+                  const labelX = labelOnRight ? node.x1 + 10 : node.x0 - 10;
+                  const anchor = labelOnRight ? "start" : "end";
 
                   return (
                     <g
                       key={node.id}
-                      transform={`translate(${node.x},${node.y})`}
                       className="cursor-pointer"
-                      style={{ opacity, filter: shadow }}
                       onMouseEnter={() => {
                         setHoveredNodeId(node.id);
                         setHoveredLinkKey(null);
@@ -857,29 +929,35 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
                       onClick={() => handleNodeSelect(node)}
                     >
                       <rect
-                        width={node.width}
-                        height={node.height}
-                        rx={18}
+                        x={node.x0}
+                        y={node.y0}
+                        width={nodeWidth}
+                        height={nodeHeight}
+                        rx={Math.min(14, nodeWidth / 2)}
                         fill={node.palette.fill}
                         stroke={node.palette.stroke}
                         strokeWidth={isActive || isHovered ? 2.5 : 1.5}
                         strokeDasharray={isGhosted ? "7 6" : undefined}
+                        opacity={isGhosted ? 0.84 : 1}
                       />
-                      <rect
-                        x={0}
-                        y={0}
-                        width={8}
-                        height={node.height}
-                        rx={18}
-                        fill={node.palette.accent}
-                        opacity={isGhosted ? 0.45 : 0.9}
-                      />
+                      {nodeWidth > 10 && (
+                        <rect
+                          x={node.x0}
+                          y={node.y0}
+                          width={Math.min(8, nodeWidth)}
+                          height={nodeHeight}
+                          rx={Math.min(14, nodeWidth / 2)}
+                          fill={node.palette.accent}
+                          opacity={isGhosted ? 0.45 : 0.9}
+                        />
+                      )}
                       <text
-                        x={22}
-                        y={26}
+                        x={labelX}
+                        y={node.y0 + 16}
+                        textAnchor={anchor}
                         style={{
                           fill: node.palette.text,
-                          fontSize: "14px",
+                          fontSize: "13px",
                           fontWeight: 700,
                           letterSpacing: "-0.01em",
                         }}
@@ -887,19 +965,20 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
                         {node.labelLines.map((line, index) => (
                           <tspan
                             key={`${node.id}-label-${index}`}
-                            x={22}
-                            dy={index === 0 ? 0 : 17}
+                            x={labelX}
+                            dy={index === 0 ? 0 : 15}
                           >
                             {line}
                           </tspan>
                         ))}
                       </text>
                       <text
-                        x={22}
-                        y={node.labelLines.length > 1 ? 54 : 46}
+                        x={labelX}
+                        y={node.y0 + (node.labelLines.length > 1 ? 48 : 34)}
+                        textAnchor={anchor}
                         style={{
                           fill: node.palette.muted,
-                          fontSize: "12px",
+                          fontSize: "11px",
                           fontWeight: 500,
                         }}
                       >
@@ -907,14 +986,15 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
                       </text>
                       {isRejected && (
                         <text
-                          x={22}
-                          y={node.labelLines.length > 1 ? 72 : 64}
+                          x={labelX}
+                          y={node.y0 + (node.labelLines.length > 1 ? 62 : 48)}
+                          textAnchor={anchor}
                           style={{
                             fill: node.palette.muted,
-                            fontSize: "11px",
+                            fontSize: "10px",
                             fontWeight: 600,
-                            textTransform: "uppercase",
                             letterSpacing: "0.08em",
+                            textTransform: "uppercase",
                           }}
                         >
                           Terminal

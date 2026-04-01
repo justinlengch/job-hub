@@ -1,7 +1,12 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
 
 from app.models.api.application_event import ApplicationEventType
 from app.models.api.job_application import ApplicationStatus
+import app.services.supabase.application_source_service as application_source_module
 from app.services.supabase.application_matcher_service import (
     AUTO_MERGE_THRESHOLD,
     REVIEW_THRESHOLD,
@@ -31,6 +36,84 @@ def _event(application_id: str, event_type: str, event_date: datetime) -> dict:
         "event_type": event_type,
         "event_date": event_date.isoformat(),
     }
+
+
+class _FakeQuery:
+    def __init__(self, table_name: str, datasets: dict):
+        self.table_name = table_name
+        self.datasets = datasets
+        self.user_id = None
+        self.application_ids = None
+        self.company = None
+        self.source_type = None
+
+    def select(self, *_args, **_kwargs):
+        return self
+
+    def eq(self, field: str, value):
+        if field == "user_id":
+            self.user_id = value
+        elif field == "canonical_source":
+            self.source_type = value
+        return self
+
+    def ilike(self, field: str, value):
+        if field == "company":
+            self.company = value
+        return self
+
+    def in_(self, field: str, values):
+        if field == "application_id":
+            self.application_ids = list(values)
+        return self
+
+    def limit(self, *_args, **_kwargs):
+        return self
+
+    def order(self, *_args, **_kwargs):
+        return self
+
+    async def execute(self):
+        if self.table_name == "job_applications":
+            rows = [
+                row
+                for row in self.datasets["job_applications"]
+                if self.user_id is None or row.get("user_id") == self.user_id
+            ]
+            if self.company:
+                company_filter = self.company.strip("%").lower()
+                rows = [
+                    row for row in rows if company_filter in (row.get("company") or "").lower()
+                ]
+            if self.source_type:
+                rows = [
+                    row
+                    for row in rows
+                    if row.get("canonical_source") == self.source_type
+                ]
+            return SimpleNamespace(data=rows)
+
+        if self.table_name == "application_events":
+            rows = [
+                row
+                for row in self.datasets["application_events"]
+                if self.user_id is None or row.get("user_id") == self.user_id
+            ]
+            if self.application_ids is not None:
+                rows = [
+                    row for row in rows if row.get("application_id") in self.application_ids
+                ]
+            return SimpleNamespace(data=rows)
+
+        return SimpleNamespace(data=[])
+
+
+class _FakeSupabaseClient:
+    def __init__(self, datasets: dict):
+        self.datasets = datasets
+
+    def table(self, table_name: str):
+        return _FakeQuery(table_name, self.datasets)
 
 
 def test_parse_upload_rows_supports_aliases_and_reports_errors():
@@ -268,3 +351,63 @@ def test_build_sankey_graph_ignores_repeated_same_stage_events_and_handles_infer
         node.id == "OFFERED" and node.kind.value == "progress" and node.column == 4
         for node in graph.nodes
     )
+
+
+@pytest.mark.asyncio
+async def test_generate_sankey_data_filters_to_requested_date_range(monkeypatch):
+    datasets = {
+        "job_applications": [
+            {
+                "application_id": "app-before",
+                "user_id": "user-1",
+                "status": ApplicationStatus.OFFERED.value,
+                "applied_date": datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
+                "application_inferred": False,
+            },
+            {
+                "application_id": "app-in-range",
+                "user_id": "user-1",
+                "status": ApplicationStatus.APPLIED.value,
+                "applied_date": datetime(2026, 1, 20, tzinfo=timezone.utc).isoformat(),
+                "application_inferred": False,
+            },
+        ],
+        "application_events": [
+            {
+                "application_id": "app-before",
+                "user_id": "user-1",
+                "event_type": ApplicationEventType.ASSESSMENT_RECEIVED.value,
+                "event_date": datetime(2026, 1, 5, tzinfo=timezone.utc).isoformat(),
+            },
+            {
+                "application_id": "app-before",
+                "user_id": "user-1",
+                "event_type": ApplicationEventType.INTERVIEW_SCHEDULED.value,
+                "event_date": datetime(2026, 1, 10, tzinfo=timezone.utc).isoformat(),
+            },
+        ],
+    }
+    fake_client = _FakeSupabaseClient(datasets)
+    monkeypatch.setattr(
+        application_source_module.supabase_service,
+        "get_client",
+        AsyncMock(return_value=fake_client),
+    )
+    monkeypatch.setattr(
+        application_source_service,
+        "get_review_queue",
+        AsyncMock(return_value={"items": [], "pending_count": 0}),
+    )
+
+    graph = await application_source_service.generate_sankey_data(
+        "user-1",
+        start_date="2026-01-10",
+        end_date="2026-01-31",
+    )
+
+    assert graph.meta.total_applications == 1
+    assert graph.meta.ghosted_count == 1
+    assert [node.id for node in graph.nodes] == ["APPLIED", "GHOSTED"]
+    assert [link.source + "->" + link.target for link in graph.links] == [
+        "APPLIED->GHOSTED"
+    ]

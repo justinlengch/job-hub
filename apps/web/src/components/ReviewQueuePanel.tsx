@@ -7,11 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, RefreshCw, ShieldAlert, Check, X } from "lucide-react";
 
-interface ReviewQueuePanelProps {
-  compact?: boolean;
-}
-
-const ReviewQueuePanel = ({ compact = false }: ReviewQueuePanelProps) => {
+const ReviewQueuePanel = () => {
   const [data, setData] = useState<ReviewQueueResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -122,7 +118,7 @@ const ReviewQueuePanel = ({ compact = false }: ReviewQueuePanelProps) => {
             Loading queue...
           </div>
         ) : data?.items.length ? (
-          <div className={`space-y-3 ${compact ? "max-h-[420px] overflow-y-auto pr-1" : ""}`}>
+          <div className="max-h-[560px] space-y-3 overflow-y-auto pr-1">
             {data.items.map((item) => (
               <div key={item.source_id} className="rounded-lg border bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -170,7 +166,7 @@ const ReviewQueuePanel = ({ compact = false }: ReviewQueuePanelProps) => {
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed bg-white p-6 text-sm text-muted-foreground">
+          <div className="rounded-lg border border-dashed bg-white px-4 py-3 text-sm text-muted-foreground">
             No items need review right now.
           </div>
         )}

@@ -204,7 +204,7 @@ const Dashboard = () => {
           />
         </div>
 
-        <div className="grid gap-6 mb-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,0.9fr)]">
+        <div className="mb-8">
           <Card className="overflow-hidden border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100 pb-4">
               <CardTitle className="flex items-center justify-between gap-4 text-lg">
@@ -232,7 +232,10 @@ const Dashboard = () => {
               </Carousel>
             </CardContent>
           </Card>
-          <ReviewQueuePanel compact />
+        </div>
+
+        <div className="mb-8">
+          <ReviewQueuePanel />
         </div>
 
         {/* Gmail Integration Section (only show if not enabled) */}

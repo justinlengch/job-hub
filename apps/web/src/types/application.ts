@@ -192,6 +192,8 @@ export interface SankeyMeta {
   inferred_count?: number;
   pending_review_count?: number;
   ghosted_count?: number;
+  start_date?: string;
+  end_date?: string;
 }
 
 export interface SankeyResponse {
@@ -200,9 +202,16 @@ export interface SankeyResponse {
   meta?: SankeyMeta;
 }
 
+export interface SankeySnapshotFilters {
+  preset: "all" | "last30" | "last90" | "custom";
+  start_date?: string;
+  end_date?: string;
+}
+
 export interface SankeySnapshotCache {
   generated_at: string;
   schema_version: number;
+  filters: SankeySnapshotFilters;
   payload: SankeyResponse;
 }
 
