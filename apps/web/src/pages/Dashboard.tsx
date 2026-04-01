@@ -8,18 +8,10 @@ import SankeyDiagram from "@/components/SankeyDiagram";
 import ReviewQueuePanel from "@/components/ReviewQueuePanel";
 import TimelineEventComponent from "@/components/TimelineEvent";
 import FilterControls from "@/components/FilterControls";
-import StatsChart from "@/components/StatsChart";
 import Navigation from "@/components/Navigation";
 import { GmailSetupButton } from "@/components/GmailSetupButton";
 import { useGmailAutomation } from "@/hooks/useGmailAutomation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel";
 import {
   FileText,
   Clock,
@@ -207,29 +199,13 @@ const Dashboard = () => {
         <div className="mb-8">
           <Card className="overflow-hidden border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100 pb-4">
-              <CardTitle className="flex items-center justify-between gap-4 text-lg">
-                <span>Analytics</span>
-                <span className="text-sm font-normal text-muted-foreground">
-                  Slide 1: status charts. Slide 2: Sankey snapshot.
-                </span>
-              </CardTitle>
+              <CardTitle className="text-lg">Analytics</CardTitle>
             </CardHeader>
             <CardContent className="px-6 py-6">
-              <Carousel opts={{ align: "start" }} className="px-12">
-                <CarouselContent>
-                  <CarouselItem>
-                    <StatsChart statusCounts={statusCounts} />
-                  </CarouselItem>
-                  <CarouselItem>
-                    <SankeyDiagram
-                      userId={sankeyUserId}
-                      onStageSelect={handleStageSelect}
-                    />
-                  </CarouselItem>
-                </CarouselContent>
-                <CarouselPrevious className="left-0 top-6 -translate-y-0" />
-                <CarouselNext className="right-0 top-6 -translate-y-0" />
-              </Carousel>
+              <SankeyDiagram
+                userId={sankeyUserId}
+                onStageSelect={handleStageSelect}
+              />
             </CardContent>
           </Card>
         </div>

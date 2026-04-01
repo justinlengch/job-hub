@@ -130,6 +130,81 @@ const NODE_PALETTE: Record<
   },
 };
 
+const STAGE_PALETTE_OVERRIDES: Record<
+  string,
+  {
+    fill: string;
+    stroke: string;
+    accent: string;
+    text: string;
+    muted: string;
+  }
+> = {
+  APPLIED: {
+    fill: "#ecfdf5",
+    stroke: "#86efac",
+    accent: "#22c55e",
+    text: "#166534",
+    muted: "#15803d",
+  },
+  ASSESSMENT: {
+    fill: "#f5f3ff",
+    stroke: "#c4b5fd",
+    accent: "#8b5cf6",
+    text: "#5b21b6",
+    muted: "#6d28d9",
+  },
+  INTERVIEW: {
+    fill: "#fff7ed",
+    stroke: "#fdba74",
+    accent: "#f59e0b",
+    text: "#9a3412",
+    muted: "#c2410c",
+  },
+  FINAL_ROUND: {
+    fill: "#eff6ff",
+    stroke: "#93c5fd",
+    accent: "#3b82f6",
+    text: "#1d4ed8",
+    muted: "#1e40af",
+  },
+  OFFERED: {
+    fill: "#ecfeff",
+    stroke: "#99f6e4",
+    accent: "#14b8a6",
+    text: "#0f766e",
+    muted: "#0d9488",
+  },
+  ACCEPTED: {
+    fill: "#ecfeff",
+    stroke: "#5eead4",
+    accent: "#0d9488",
+    text: "#115e59",
+    muted: "#0f766e",
+  },
+  REJECTED: {
+    fill: "#fff1f2",
+    stroke: "#fda4af",
+    accent: "#ef4444",
+    text: "#be123c",
+    muted: "#e11d48",
+  },
+  WITHDRAWN: {
+    fill: "#f3f4f6",
+    stroke: "#6b7280",
+    accent: "#6b7280",
+    text: "#374151",
+    muted: "#4b5563",
+  },
+  GHOSTED: {
+    fill: "#f8fafc",
+    stroke: "#cbd5e1",
+    accent: "#94a3b8",
+    text: "#334155",
+    muted: "#475569",
+  },
+};
+
 const FILTERABLE_STAGES = new Set([
   "APPLIED",
   "ASSESSMENT",
@@ -360,6 +435,9 @@ const resolveColumnIndex = (node: SankeyNode) => {
 };
 
 const resolvePalette = (kindKey: string, stageKey: string) => {
+  if (stageKey in STAGE_PALETTE_OVERRIDES) {
+    return STAGE_PALETTE_OVERRIDES[stageKey];
+  }
   if (kindKey in NODE_PALETTE) return NODE_PALETTE[kindKey];
   const mapped = STAGE_FALLBACK_KINDS[stageKey];
   if (mapped && mapped in NODE_PALETTE) return NODE_PALETTE[mapped];
