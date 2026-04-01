@@ -269,6 +269,9 @@ const displayLabelForStage = (stageKey: string) => {
   return formatStageLabel(stageKey);
 };
 
+const formatCountLabel = (count: number) =>
+  `${new Intl.NumberFormat().format(count)}`;
+
 const kindPriority = (kindKey: string) => {
   switch (kindKey) {
     case "root":
@@ -555,9 +558,9 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
           chartWidth < 640 ? 11 : 15
         ),
         sortIndex:
-          kindPriority(kindKey) * 100 +
-          stageOrderValue(stageKey) * 10 -
-          Math.min(node.count, 9),
+          node.columnIndex * 100 +
+          stageOrderValue(stageKey) * 10 +
+          kindPriority(kindKey),
       };
     });
 
@@ -786,9 +789,9 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <Badge variant="outline">{currentRangeLabel}</Badge>
-            <Badge variant="outline">{totalApplications} applications</Badge>
-            <Badge variant="outline">{ghostedCount} ghosted</Badge>
-            <Badge variant="outline">{inferredCount} inferred</Badge>
+            <Badge variant="outline">{formatCountLabel(totalApplications)} total</Badge>
+            <Badge variant="outline">{formatCountLabel(ghostedCount)} ghosted</Badge>
+            <Badge variant="outline">{formatCountLabel(inferredCount)} inferred</Badge>
             {generatedAt && (
               <Badge variant="outline">Generated {formatGeneratedAt(generatedAt)}</Badge>
             )}
@@ -1056,13 +1059,13 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
                         textAnchor={anchor}
                         style={{
                           fill: node.palette.muted,
-                          fontSize: "11px",
-                          fontWeight: 500,
+                          fontSize: "12px",
+                          fontWeight: 700,
                         }}
                       >
-                        {node.count} applications
+                        {formatCountLabel(node.count)}
                       </text>
-                      {isRejected && (
+                      {(isRejected || isGhosted) && (
                         <text
                           x={labelX}
                           y={node.y0 + (node.labelLines.length > 1 ? 62 : 48)}
@@ -1075,7 +1078,7 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
                             textTransform: "uppercase",
                           }}
                         >
-                          Terminal
+                          End state
                         </text>
                       )}
                     </g>
@@ -1089,10 +1092,10 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
                     <div className="space-y-1 text-sm">
                       <p className="font-semibold">{linkLabel(hoveredLink)}</p>
                       <p className="text-muted-foreground">
-                        {hoveredLink.value} applications
+                        {formatCountLabel(hoveredLink.value)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {displayPercent(hoveredLink.value)} of all applications
+                        {displayPercent(hoveredLink.value)} of total
                       </p>
                       {hoveredLink.kindKey === "ghosted" && (
                         <p className="text-xs text-muted-foreground">
@@ -1104,10 +1107,10 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
                     <div className="space-y-1 text-sm">
                       <p className="font-semibold">{hoveredNode.label}</p>
                       <p className="text-muted-foreground">
-                        {hoveredNode.count} applications reached this node
+                        {formatCountLabel(hoveredNode.count)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {displayPercent(hoveredNode.count)} of all applications
+                        {displayPercent(hoveredNode.count)} of total
                       </p>
                       {hoveredNode.kindKey === "ghosted" && (
                         <p className="text-xs text-muted-foreground">
@@ -1119,7 +1122,7 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
                     <div className="space-y-1 text-sm">
                       <p className="font-semibold">{linkLabel(selectedLink)}</p>
                       <p className="text-muted-foreground">
-                        {selectedLink.value} applications selected
+                        {formatCountLabel(selectedLink.value)}
                       </p>
                     </div>
                   ) : null}
