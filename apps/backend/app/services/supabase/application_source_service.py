@@ -83,6 +83,7 @@ SANKY_STAGE_RANK = {
 
 
 class ApplicationSourceService(BaseService):
+    SANKY_EVENT_FETCH_BATCH_SIZE = 200
     CSV_HEADER_ALIASES = {
         "company": {"company", "company name", "employer"},
         "role": {"role", "title", "job title", "position"},
@@ -107,6 +108,11 @@ class ApplicationSourceService(BaseService):
     @staticmethod
     def _utc_now() -> datetime:
         return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _chunked(values: List[str], size: int) -> Iterable[List[str]]:
+        for index in range(0, len(values), size):
+            yield values[index : index + size]
 
     @staticmethod
     def _parse_datetime(value: Any) -> Optional[datetime]:
@@ -1603,14 +1609,17 @@ class ApplicationSourceService(BaseService):
         application_ids = [row["application_id"] for row in applications if row.get("application_id")]
         events: List[Dict[str, Any]] = []
         if application_ids:
-            event_query = (
-                supabase.table("application_events")
-                .select("*")
-                .eq("user_id", user_id)
-                .in_("application_id", application_ids)
-            )
-            event_resp = await event_query.execute()
-            events = event_resp.data or []
+            for batch_ids in self._chunked(
+                application_ids, self.SANKY_EVENT_FETCH_BATCH_SIZE
+            ):
+                event_query = (
+                    supabase.table("application_events")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .in_("application_id", batch_ids)
+                )
+                event_resp = await event_query.execute()
+                events.extend(event_resp.data or [])
 
         start_dt = self._parse_datetime(start_date)
         end_dt = self._parse_datetime(end_date)
