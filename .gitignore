@@ -43,3 +43,6 @@ venv/
 ENV/
 env/
 .vercel
+
+# Local job export data
+data/Jobs/
