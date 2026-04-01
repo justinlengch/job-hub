@@ -409,40 +409,44 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
       </div>
 
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden p-0">
           <DialogHeader>
-            <DialogTitle>
-              {selectedApp ? `${selectedApp.company} — ${selectedApp.role}` : "Application Details"}
-            </DialogTitle>
-            {selectedApp && (
-              <div className="flex flex-wrap items-center gap-2 pt-2">
-                <Badge variant="secondary">{selectedApp.status}</Badge>
-                {selectedApp.application_inferred && <Badge variant="outline">Inferred</Badge>}
-                {selectedApp.needs_review && <Badge variant="destructive">Needs review</Badge>}
-                <div className="ml-auto flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground">Final round</span>
-                  <Switch
-                    checked={isFinalRound}
-                    onCheckedChange={handleFinalRoundToggle}
-                    disabled={eventsLoading || updatingFinalRound}
-                  />
+            <div className="border-b px-6 py-5">
+              <DialogTitle>
+                {selectedApp ? `${selectedApp.company} — ${selectedApp.role}` : "Application Details"}
+              </DialogTitle>
+              {selectedApp && (
+                <div className="flex flex-wrap items-center gap-2 pt-2">
+                  <Badge variant="secondary">{selectedApp.status}</Badge>
+                  {selectedApp.application_inferred && <Badge variant="outline">Inferred</Badge>}
+                  {selectedApp.needs_review && <Badge variant="destructive">Needs review</Badge>}
+                  <div className="ml-auto flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">Final round</span>
+                    <Switch
+                      checked={isFinalRound}
+                      onCheckedChange={handleFinalRoundToggle}
+                      disabled={eventsLoading || updatingFinalRound}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="max-h-[calc(85vh-120px)] overflow-y-auto px-6 py-4">
             {eventsLoading ? (
               <p className="text-sm text-muted-foreground">Loading events...</p>
             ) : appEvents.length ? (
-              [...appEvents]
-                .sort(
-                  (a, b) =>
-                    new Date(b.email_received_at || b.event_date).getTime() -
-                    new Date(a.email_received_at || a.event_date).getTime()
-                )
-                .map((event) => (
-                  <TimelineEventComponent key={event.id} event={event} />
-                ))
+              <div className="space-y-3">
+                {[...appEvents]
+                  .sort(
+                    (a, b) =>
+                      new Date(b.email_received_at || b.event_date).getTime() -
+                      new Date(a.email_received_at || a.event_date).getTime()
+                  )
+                  .map((event) => (
+                    <TimelineEventComponent key={event.id} event={event} />
+                  ))}
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground">No events yet</p>
             )}
