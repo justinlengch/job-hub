@@ -14,6 +14,7 @@ class ApplicationEventType(str, Enum):
     ASSESSMENT_COMPLETED = "ASSESSMENT_COMPLETED"
     INTERVIEW_SCHEDULED = "INTERVIEW_SCHEDULED"
     INTERVIEW_COMPLETED = "INTERVIEW_COMPLETED"
+    FINAL_ROUND = "FINAL_ROUND"
     REFERENCE_REQUESTED = "REFERENCE_REQUESTED"
     OFFER_RECEIVED = "OFFER_RECEIVED"
     OFFER_ACCEPTED = "OFFER_ACCEPTED"
@@ -43,6 +44,18 @@ class ApplicationEventCreate(BaseModel):
     )
     notes: Optional[str] = Field(None, description="Additional notes about the event")
     email_id: Optional[str] = Field(None, description="ID of the related email, if any")
+    source_type: Optional[str] = Field(
+        None, description="Source system that produced the event"
+    )
+    source_id: Optional[str] = Field(
+        None, description="ID of the related source record, if any"
+    )
+    is_inferred: bool = Field(
+        False, description="Whether the event was inferred rather than observed"
+    )
+    confidence_score: Optional[float] = Field(
+        None, ge=0.0, le=1.0, description="Confidence score for the event"
+    )
 
 
 class ApplicationEventRead(ApplicationEventCreate):

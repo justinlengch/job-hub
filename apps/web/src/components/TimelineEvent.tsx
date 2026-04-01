@@ -16,6 +16,7 @@ const eventTypeColors = {
   ASSESSMENT_COMPLETED: "bg-purple-100 text-purple-800",
   INTERVIEW_SCHEDULED: "bg-yellow-100 text-yellow-800",
   INTERVIEW_COMPLETED: "bg-yellow-100 text-yellow-800",
+  FINAL_ROUND: "bg-indigo-100 text-indigo-800",
   REFERENCE_REQUESTED: "bg-orange-100 text-orange-800",
   OFFER_RECEIVED: "bg-green-100 text-green-800",
   OFFER_ACCEPTED: "bg-green-100 text-green-800",
@@ -53,6 +54,15 @@ const TimelineEventComponent = ({ event }: TimelineEventProps) => {
             {event.role || "Unknown Role"}
           </p>
           <p className="text-sm">{event.description}</p>
+          {(event.source_type || typeof event.confidence_score === "number" || event.is_inferred) && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {event.source_type && <span>Source: {event.source_type}</span>}
+              {typeof event.confidence_score === "number" && (
+                <span>Confidence: {Math.round(event.confidence_score * 100)}%</span>
+              )}
+              {event.is_inferred && <Badge variant="outline">Inferred</Badge>}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">

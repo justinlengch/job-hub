@@ -3,6 +3,8 @@ import { useApplications } from "@/hooks/useApplications";
 import { useApplicationEvents } from "@/hooks/useApplicationEvents";
 import { JobApplication, StatusCounts } from "@/types/application";
 import StatusCard from "@/components/StatusCard";
+import SankeyDiagram from "@/components/SankeyDiagram";
+import ReviewQueuePanel from "@/components/ReviewQueuePanel";
 import TimelineEventComponent from "@/components/TimelineEvent";
 import FilterControls from "@/components/FilterControls";
 import StatsChart from "@/components/StatsChart";
@@ -37,6 +39,21 @@ const Dashboard = () => {
     error: eventsError,
   } = useApplicationEvents();
   const { isEnabled } = useGmailAutomation();
+  const allowedStatuses: Array<JobApplication["status"]> = [
+    "APPLIED",
+    "ASSESSMENT",
+    "INTERVIEW",
+    "OFFERED",
+    "ACCEPTED",
+    "REJECTED",
+    "WITHDRAWN",
+  ];
+
+  const handleStageSelect = (stage: string) => {
+    if (allowedStatuses.includes(stage as JobApplication["status"])) {
+      setSelectedStatus(stage as JobApplication["status"]);
+    }
+  };
 
   // Show loading state
   if (appsLoading || eventsLoading) {
@@ -175,6 +192,11 @@ const Dashboard = () => {
             color="text-red-600"
             bgColor="bg-red-100"
           />
+        </div>
+
+        <div className="grid gap-6 mb-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,0.9fr)]">
+          <SankeyDiagram onStageSelect={handleStageSelect} />
+          <ReviewQueuePanel compact />
         </div>
 
         {/* Charts */}

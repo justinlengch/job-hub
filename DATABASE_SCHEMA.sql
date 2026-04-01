@@ -27,12 +27,28 @@ CREATE TYPE application_event_type AS ENUM (
   'ASSESSMENT_COMPLETED',
   'INTERVIEW_SCHEDULED',
   'INTERVIEW_COMPLETED',
+  'FINAL_ROUND',
   'REFERENCE_REQUESTED',
   'OFFER_RECEIVED',
   'OFFER_ACCEPTED',
   'OFFER_DECLINED',
   'APPLICATION_REJECTED',
   'APPLICATION_WITHDRAWN'
+);
+
+-- Create application source type enum
+CREATE TYPE application_source_type AS ENUM (
+  'EMAIL',
+  'LINKEDIN_EASY_APPLY'
+);
+
+-- Create application merge status enum
+CREATE TYPE application_merge_status AS ENUM (
+  'AUTO_MERGED',
+  'PENDING_REVIEW',
+  'UNMATCHED',
+  'MANUALLY_CONFIRMED',
+  'MANUALLY_SEPARATED'
 );
 
 -- 2. Create Tables
@@ -52,6 +68,13 @@ location TEXT,
 salary_range TEXT,
 notes TEXT,
 applied_date TIMESTAMPTZ,
+canonical_source TEXT,
+application_origin TEXT,
+application_inferred BOOLEAN DEFAULT FALSE,
+inferred_reason TEXT,
+applied_date_precision TEXT,
+match_confidence FLOAT,
+needs_review BOOLEAN DEFAULT FALSE,
 created_at TIMESTAMPTZ DEFAULT now(),
 last_updated_at TIMESTAMPTZ, -- No default, will be NULL initially
 last_email_received_at TIMESTAMPTZ -- Track last email specifically
@@ -70,6 +93,10 @@ location TEXT,
 contact_person TEXT,
 notes TEXT,
 email_id UUID, -- Reference to triggering email if applicable
+source_type application_source_type,
+source_id UUID,
+is_inferred BOOLEAN DEFAULT FALSE,
+confidence_score FLOAT,
 created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -88,6 +115,46 @@ body_html TEXT,
 received_at TIMESTAMPTZ NOT NULL,
 parsed_at TIMESTAMPTZ,
 confidence_score FLOAT,
+created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Create application_sources table for raw email and LinkedIn records
+DROP TABLE IF EXISTS application_sources CASCADE;
+CREATE TABLE application_sources (
+source_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+user_id TEXT NOT NULL,
+source_type application_source_type NOT NULL,
+external_source_id TEXT,
+application_id UUID REFERENCES job_applications(application_id) ON DELETE SET NULL,
+candidate_application_id UUID REFERENCES job_applications(application_id) ON DELETE SET NULL,
+company_raw TEXT NOT NULL,
+role_raw TEXT NOT NULL,
+applied_at TIMESTAMPTZ,
+observed_at TIMESTAMPTZ,
+sender_domain TEXT,
+source_url TEXT,
+payload_json JSONB,
+merge_confidence FLOAT,
+merge_status application_merge_status NOT NULL DEFAULT 'UNMATCHED',
+review_reason TEXT,
+created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS application_sources_user_id_idx ON application_sources(user_id);
+CREATE INDEX IF NOT EXISTS application_sources_application_id_idx ON application_sources(application_id);
+CREATE INDEX IF NOT EXISTS application_sources_candidate_application_id_idx ON application_sources(candidate_application_id);
+CREATE INDEX IF NOT EXISTS application_sources_merge_status_idx ON application_sources(merge_status);
+
+-- Create email_refs table used by the backend email pipeline
+DROP TABLE IF EXISTS email_refs CASCADE;
+CREATE TABLE email_refs (
+email_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+user_id TEXT NOT NULL,
+application_id UUID REFERENCES job_applications(application_id) ON DELETE SET NULL,
+external_email_id TEXT NOT NULL,
+thread_id TEXT,
+history_id BIGINT,
+received_at TIMESTAMPTZ NOT NULL,
 created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -151,9 +218,13 @@ EXECUTE FUNCTION update_job_application_on_email_insert();
 ALTER TABLE job_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE application_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE emails ENABLE ROW LEVEL SECURITY;
+ALTER TABLE application_sources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_refs ENABLE ROW LEVEL SECURITY;
 
 -- Development policies (remove in production)
 CREATE POLICY "dev_job_applications_policy" ON job_applications FOR ALL USING (true);
 CREATE POLICY "dev_application_events_policy" ON application_events FOR ALL USING (true);
 CREATE POLICY "dev_emails_policy" ON emails FOR ALL USING (true);
+CREATE POLICY "dev_application_sources_policy" ON application_sources FOR ALL USING (true);
+CREATE POLICY "dev_email_refs_policy" ON email_refs FOR ALL USING (true);
 $$

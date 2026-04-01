@@ -16,6 +16,7 @@ export type ApplicationEventType =
   | "ASSESSMENT_COMPLETED"
   | "INTERVIEW_SCHEDULED"
   | "INTERVIEW_COMPLETED"
+  | "FINAL_ROUND"
   | "REFERENCE_REQUESTED"
   | "OFFER_RECEIVED"
   | "OFFER_ACCEPTED"
@@ -33,6 +34,13 @@ export interface JobApplication {
   location?: string;
   salary_range?: string;
   notes?: string;
+  canonical_source?: "EMAIL" | "LINKEDIN" | "MERGED" | "MANUAL";
+  application_origin?: "EMAIL" | "LINKEDIN_EASY_APPLY" | "MANUAL" | "UNKNOWN";
+  application_inferred?: boolean;
+  inferred_reason?: string;
+  applied_date_precision?: "EXACT" | "APPROXIMATE" | "INFERRED";
+  match_confidence?: number;
+  needs_review?: boolean;
   created_at: string;
   applied_date?: string;
   last_updated_at: string;
@@ -48,6 +56,10 @@ export interface ApplicationEvent {
   email_id?: string;
   gmail_url?: string;
   email_received_at?: string;
+  source_type?: "EMAIL" | "LINKEDIN_EASY_APPLY" | "MANUAL";
+  source_id?: string;
+  is_inferred?: boolean;
+  confidence_score?: number;
   created_at: string;
 }
 
@@ -106,6 +118,105 @@ export interface TimelineEvent {
   email_id?: string;
   company?: string;
   role?: string;
+  source_type?: "EMAIL" | "LINKEDIN_EASY_APPLY" | "MANUAL";
+  confidence_score?: number;
+  is_inferred?: boolean;
+}
+
+export interface ApplicationSource {
+  source_id: string;
+  user_id: string;
+  source_type: "EMAIL" | "LINKEDIN_EASY_APPLY";
+  external_source_id?: string;
+  application_id?: string;
+  company_raw: string;
+  role_raw: string;
+  applied_at_raw?: string;
+  observed_at?: string;
+  sender_domain?: string;
+  source_url?: string;
+  payload_json?: Record<string, unknown>;
+  merge_confidence?: number;
+  merge_status?:
+    | "AUTO_MERGED"
+    | "PENDING_REVIEW"
+    | "UNMATCHED"
+    | "MANUALLY_CONFIRMED"
+    | "MANUALLY_SEPARATED";
+  review_reason?: string;
+  created_at?: string;
+}
+
+export interface ReviewQueueItem {
+  source_id: string;
+  source_type: "EMAIL" | "LINKEDIN_EASY_APPLY";
+  company: string;
+  role: string;
+  sender_domain?: string;
+  candidate_application_id?: string;
+  candidate_company?: string;
+  candidate_role?: string;
+  confidence_score: number;
+  review_reason: string;
+  observed_at?: string;
+  applied_at?: string;
+  status_text?: string;
+  source_url?: string;
+}
+
+export interface ReviewQueueResponse {
+  items: ReviewQueueItem[];
+  pending_count: number;
+}
+
+export interface SankeyNode {
+  id: string;
+  label: string;
+  count: number;
+  stage?: string;
+}
+
+export interface SankeyLink {
+  source: string;
+  target: string;
+  value: number;
+  application_ids?: string[];
+  label?: string;
+}
+
+export interface SankeyMeta {
+  total_applications: number;
+  inferred_count?: number;
+  pending_review_count?: number;
+}
+
+export interface SankeyResponse {
+  nodes: SankeyNode[];
+  links: SankeyLink[];
+  meta?: SankeyMeta;
+}
+
+export interface LinkedInImportSummary {
+  processed_rows: number;
+  created_applications: number;
+  merged_applications: number;
+  review_items: number;
+  failed_rows: number;
+  message?: string;
+}
+
+export interface LinkedInImportResult {
+  summary: LinkedInImportSummary;
+  errors?: Array<{
+    row_number: number;
+    message: string;
+  }>;
+}
+
+export interface FinalRoundToggleResponse {
+  application_id: string;
+  is_final_round: boolean;
+  event_id?: string;
 }
 
 // Email parsing types for backend API

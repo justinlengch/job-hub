@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApplications } from "@/hooks/useApplications";
 import ApplicationsTable from "@/components/ApplicationsTable";
+import LinkedInImportCard from "@/components/LinkedInImportCard";
 import Navigation from "@/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,14 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { ApplicationStatus, JobApplication } from "@/types/application";
 
 const Spreadsheet = () => {
-  const { applications, loading, error, deleteApplication, createApplication } = useApplications();
+  const {
+    applications,
+    loading,
+    error,
+    deleteApplication,
+    createApplication,
+    refetch,
+  } = useApplications();
 
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -29,42 +37,6 @@ const Spreadsheet = () => {
     applied_date: null,
   });
 
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading applications...</p>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Show error state
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-              <p className="text-red-600">
-                Error loading applications: {error}
-              </p>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -78,6 +50,24 @@ const Spreadsheet = () => {
           <p className="text-gray-600">
             Detailed view of all your job applications
           </p>
+        </div>
+
+        {(loading || error) && (
+          <div
+            className={`mb-6 rounded-lg border px-4 py-3 text-sm ${
+              error ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-600"
+            }`}
+          >
+            {loading ? "Loading applications..." : `Error loading applications: ${error}`}
+          </div>
+        )}
+
+        <div className="mb-8">
+          <LinkedInImportCard
+            onImported={async () => {
+              await refetch();
+            }}
+          />
         </div>
 
         {/* New Application Dialog */}
@@ -274,7 +264,25 @@ const Spreadsheet = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <ApplicationsTable applications={applications} onDelete={deleteApplication} hideExport />
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading applications...</p>
+                </div>
+              </div>
+            ) : error ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                  <p className="text-red-600">
+                    Error loading applications: {error}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <ApplicationsTable applications={applications} onDelete={deleteApplication} hideExport />
+            )}
           </CardContent>
         </Card>
       </main>

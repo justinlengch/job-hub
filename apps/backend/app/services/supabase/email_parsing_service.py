@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from app.models.llm.llm_email import EmailIntent, LLMEmailInput, LLMEmailOutput
 from app.services.ai.llm_service import extract_job_info
 from app.services.base_service import BaseService, ServiceOperationError
-from app.services.supabase.job_application_service import job_application_service
+from app.services.supabase.application_source_service import application_source_service
 from app.services.supabase.supabase_client import supabase_service
 
 logger = logging.getLogger(__name__)
@@ -126,24 +126,21 @@ class EmailParsingService(BaseService):
                 "intent": parsed.intent.value,
             }
 
-            if parsed.intent == EmailIntent.NEW_APPLICATION:
-                application_data = await job_application_service.handle_new_application(
-                    user_id, parsed, email_id
+            if parsed.intent in (EmailIntent.NEW_APPLICATION, EmailIntent.APPLICATION_EVENT):
+                source_result = await application_source_service.process_email_source(
+                    user_id=user_id,
+                    parsed=parsed,
+                    email_id=email_id,
+                    sender=sender,
+                    subject=subject,
+                    received_at=received_at,
                 )
-                result["application"] = application_data
-
-            elif parsed.intent == EmailIntent.APPLICATION_EVENT:
-                event_data = await job_application_service.handle_application_event(
-                    user_id, parsed, email_id
-                )
-                result["event"] = event_data
-                if isinstance(event_data, dict) and event_data.get(
-                    "created_new_application"
-                ):
-                    self.logger.info(
-                        f"email_process created_new_application user={user_id} raw_email_id={raw_email_id} email_id={email_id} "
-                        f"company={parsed.company} role={parsed.role}"
-                    )
+                if source_result.get("application"):
+                    result["application"] = source_result["application"]
+                if source_result.get("event"):
+                    result["event"] = source_result["event"]
+                if source_result.get("pending_review"):
+                    result["pending_review"] = True
 
             self.logger.info(
                 f"email_process done user={user_id} raw_email_id={raw_email_id} email_id={email_id} "

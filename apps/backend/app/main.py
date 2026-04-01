@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.routes.applications import router as applications_router
 from app.routes.auth import router as auth_router
 from app.routes.gmail import router as gmail_router
 from app.routes.parse import router as parse_router
@@ -163,6 +164,7 @@ async def _on_shutdown():
 
 
 app.include_router(parse_router, prefix="/api")
+app.include_router(applications_router)
 app.include_router(gmail_router)
 app.include_router(auth_router)
 app.include_router(pubsub_router, prefix="/api")

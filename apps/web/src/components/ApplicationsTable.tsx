@@ -3,8 +3,11 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { JobApplication, ApplicationEvent } from "@/types/application";
 import { emailRefsService, buildGmailUrlWithPrefs, applicationEventsService, jobApplicationsService } from "@/services/supabase";
+import { apiService } from "@/services/api";
+import { toast } from "sonner";
 import {
   Search,
   Download,
@@ -50,6 +53,7 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
   const [selectedApp, setSelectedApp] = useState<JobApplication | null>(null);
   const [appEvents, setAppEvents] = useState<ApplicationEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [updatingFinalRound, setUpdatingFinalRound] = useState(false);
   const itemsPerPage = 10;
 
   const [localApps, setLocalApps] = useState<JobApplication[]>(applications);
@@ -167,6 +171,24 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
       setAppEvents([]);
     } finally {
       setEventsLoading(false);
+    }
+  };
+
+  const isFinalRound = appEvents.some((event) => event.event_type === "FINAL_ROUND");
+
+  const handleFinalRoundToggle = async (enabled: boolean) => {
+    if (!selectedApp) return;
+
+    setUpdatingFinalRound(true);
+    try {
+      await apiService.toggleFinalRound(selectedApp.id, enabled);
+      toast.success(enabled ? "Marked as final round" : "Final round cleared");
+      await handleOpenDetails(selectedApp);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update final-round state";
+      toast.error(message);
+    } finally {
+      setUpdatingFinalRound(false);
     }
   };
 
@@ -392,6 +414,21 @@ const ApplicationsTable = ({ applications, onDelete, hideExport }: ApplicationsT
             <DialogTitle>
               {selectedApp ? `${selectedApp.company} — ${selectedApp.role}` : "Application Details"}
             </DialogTitle>
+            {selectedApp && (
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <Badge variant="secondary">{selectedApp.status}</Badge>
+                {selectedApp.application_inferred && <Badge variant="outline">Inferred</Badge>}
+                {selectedApp.needs_review && <Badge variant="destructive">Needs review</Badge>}
+                <div className="ml-auto flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground">Final round</span>
+                  <Switch
+                    checked={isFinalRound}
+                    onCheckedChange={handleFinalRoundToggle}
+                    disabled={eventsLoading || updatingFinalRound}
+                  />
+                </div>
+              </div>
+            )}
           </DialogHeader>
           <div className="space-y-3">
             {eventsLoading ? (
