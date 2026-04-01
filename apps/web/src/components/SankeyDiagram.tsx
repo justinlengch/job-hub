@@ -32,13 +32,13 @@ import {
 const STAGE_FALLBACK_COLUMNS: Record<string, number> = {
   APPLIED: 0,
   GHOSTED: 1,
-  ASSESSMENT: 1,
-  REJECTED: 1,
-  INTERVIEW: 2,
-  FINAL_ROUND: 3,
-  OFFERED: 4,
-  ACCEPTED: 5,
-  WITHDRAWN: 5,
+  REJECTED: 2,
+  ASSESSMENT: 3,
+  INTERVIEW: 4,
+  FINAL_ROUND: 5,
+  OFFERED: 6,
+  ACCEPTED: 7,
+  WITHDRAWN: 7,
 };
 
 const STAGE_FALLBACK_KINDS: Record<string, string> = {
@@ -74,7 +74,7 @@ const PRESET_OPTIONS: Array<{
   { id: "last90", label: "Last 90 days" },
 ];
 
-const SANKEY_CACHE_SCHEMA_VERSION = 2;
+const SANKEY_CACHE_SCHEMA_VERSION = 3;
 
 const NODE_PALETTE: Record<
   string,

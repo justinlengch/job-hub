@@ -82,8 +82,12 @@ const LinkedInImportCard = ({ onImported }: LinkedInImportCardProps) => {
         </div>
 
         <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
-          Required columns: <span className="font-medium text-foreground">company</span>, <span className="font-medium text-foreground">role</span>, <span className="font-medium text-foreground">applied_at</span>.
-          Optional fields such as <span className="font-medium text-foreground">status_text</span>, <span className="font-medium text-foreground">job_url</span>, and <span className="font-medium text-foreground">source_url</span> can be added later without changing the merge logic.
+          Required fields: company, role, and applied date. LinkedIn exports like
+          <span className="font-medium text-foreground"> Company Name</span>,
+          <span className="font-medium text-foreground"> Job Title</span>,
+          <span className="font-medium text-foreground"> Application Date</span>, and
+          <span className="font-medium text-foreground"> Job Url</span> are supported directly.
+          Contact details, resume names, and question-answer export fields are ignored for job parsing.
         </div>
 
         {error && (

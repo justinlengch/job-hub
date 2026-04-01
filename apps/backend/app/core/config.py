@@ -34,6 +34,21 @@ class Settings:
     WATCH_REFRESH_THRESHOLD_SECONDS: int = int(
         os.getenv("WATCH_REFRESH_THRESHOLD_SECONDS", "600")
     )
+    EMAIL_INGEST_WORKER_CONCURRENCY: int = int(
+        os.getenv("EMAIL_INGEST_WORKER_CONCURRENCY", "1")
+    )
+    EMAIL_INGEST_WORKER_BATCH_SIZE: int = int(
+        os.getenv("EMAIL_INGEST_WORKER_BATCH_SIZE", "10")
+    )
+    EMAIL_INGEST_WORKER_POLL_SECONDS: int = int(
+        os.getenv("EMAIL_INGEST_WORKER_POLL_SECONDS", "5")
+    )
+    EMAIL_INGEST_QUEUE_LEASE_SECONDS: int = int(
+        os.getenv("EMAIL_INGEST_QUEUE_LEASE_SECONDS", "300")
+    )
+    EMAIL_INGEST_MAX_ATTEMPTS: int = int(
+        os.getenv("EMAIL_INGEST_MAX_ATTEMPTS", "5")
+    )
 
 
 settings = Settings()

@@ -385,6 +385,50 @@ class ApplicationMatcherService(BaseService):
             return match.application_id
         return None
 
+    async def find_existing_application_exact(
+        self,
+        *,
+        user_id: str,
+        company: str,
+        role: str,
+        location: Optional[str] = None,
+        source_url: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        candidates = await self.list_candidate_applications(user_id)
+        normalized_company = self.normalize_company(company)
+        normalized_role = self.normalize_role(role)
+        normalized_source_domain = self.extract_domain(source_url)
+        normalized_location = self._normalize_text(location)
+
+        exact_matches: List[Dict[str, Any]] = []
+        for row in candidates:
+            if self.normalize_company(row.get("company")) != normalized_company:
+                continue
+            if self.normalize_role(row.get("role")) != normalized_role:
+                continue
+
+            candidate_domain = self.extract_domain(row.get("job_posting_url"))
+            if normalized_source_domain and candidate_domain:
+                if normalized_source_domain != candidate_domain:
+                    continue
+
+            candidate_location = self._normalize_text(row.get("location"))
+            if normalized_location and candidate_location:
+                if normalized_location != candidate_location:
+                    continue
+
+            exact_matches.append(row)
+
+        if not exact_matches:
+            return None
+
+        def sort_key(row: Dict[str, Any]) -> tuple[int, str]:
+            applied_date = row.get("applied_date") or ""
+            return (1 if applied_date else 0, str(applied_date))
+
+        exact_matches.sort(key=sort_key, reverse=True)
+        return exact_matches[0]
+
     @staticmethod
     def infer_status_from_text(status_text: Optional[str]) -> ApplicationStatus:
         normalized = (status_text or "").lower()

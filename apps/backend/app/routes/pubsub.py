@@ -1,13 +1,15 @@
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Request, Response
+from fastapi import APIRouter, Request, Response
 
 from app.services.crypto import decrypt_refresh_token
 from app.services.google.gmail_history_service import gmail_history_service
 from app.services.google.gmail_service import gmail_service
 from app.services.google.pubsub_service import pubsub_service
-from app.services.supabase.email_parsing_service import parse_and_persist
+from app.services.supabase.email_ingest_queue_service import (
+    email_ingest_queue_service,
+)
 from app.services.supabase.supabase_client import supabase_service
 
 logger = logging.getLogger(__name__)
@@ -90,14 +92,13 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
             )
             return
 
-        creds = {
-            "access_token": None,
-            "refresh_token": refresh_token,
-        }
-
-        if not gmail_service.create_gmail_client(creds):
+        try:
+            gmail_client = gmail_service.build_gmail_client(
+                {"access_token": None, "refresh_token": refresh_token}
+            )
+        except Exception as e:
             logger.error(
-                f"gmail_push gmail_client_init_failed user={user_id} email={email_address}"
+                f"gmail_push gmail_client_init_failed user={user_id} email={email_address} err={e}"
             )
             return
 
@@ -107,7 +108,7 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
         )
         refs, latest_history_id = gmail_history_service.process_history(
             user_id=user_id,
-            gmail_client=gmail_service.service,
+            gmail_client=gmail_client,
             since_history_id=since,
             label_id=label_id,
         )
@@ -121,68 +122,14 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
                 f"gmail_push refs_found count={len(refs)} user={user_id} email={email_address}"
             )
 
-        for ref in refs:
-            msg_id = ref.get("messageId")
-            thread_id = ref.get("threadId")
-            history_id = ref.get("historyId")
-            logger.info(
-                f"gmail_push ingest_start user={user_id} msg_id={msg_id} thread_id={thread_id} history_id={history_id}"
-            )
-            try:
-                # Determine if force-parse label applied
-                try:
-                    force_label_id = gmail_service.get_or_create_force_parse_label_id()
-                except Exception:
-                    force_label_id = None
-
-                has_force = False
-                try:
-                    meta = (
-                        gmail_service.service.users()
-                        .messages()
-                        .get(userId="me", id=msg_id, format="metadata")
-                        .execute()
-                    )
-                    has_force = force_label_id in set(meta.get("labelIds") or [])
-                except Exception as e:
-                    logger.warning(
-                        f"gmail_push meta_fetch_failed user={user_id} msg_id={msg_id} err={e}"
-                    )
-
-                # Early duplicate short-circuit unless force label is present
-                if not has_force:
-                    try:
-                        existing_ref = (
-                            await supabase.table("email_refs")
-                            .select("email_id")
-                            .eq("user_id", user_id)
-                            .eq("external_email_id", msg_id)
-                            .limit(1)
-                            .execute()
-                        )
-                        if existing_ref.data:
-                            logger.info(
-                                f"gmail_push duplicate_short_circuit user={user_id} msg_id={msg_id} email_id={existing_ref.data[0]['email_id']}"
-                            )
-                            continue
-                    except Exception as e:
-                        logger.warning(
-                            f"gmail_push duplicate_check_failed user={user_id} msg_id={msg_id} err={e}"
-                        )
-
-                result = await parse_and_persist(ref, user_id, gmail_service.service)
-                intent = result.get("intent")
-                status = result.get("status")
-                email_id = result.get("email_id")
-                app = result.get("application") or {}
-                app_id = app.get("application_id") if isinstance(app, dict) else None
-                logger.info(
-                    f"gmail_push ingest_done user={user_id} msg_id={msg_id} status={status} intent={intent} email_id={email_id} application_id={app_id}"
-                )
-            except Exception as e:
-                logger.exception(
-                    f"gmail_push parse_and_persist_failed user={user_id} msg={msg_id} err={e}"
-                )
+        enqueue_stats = await email_ingest_queue_service.enqueue_refs(
+            user_id=user_id, refs=refs
+        )
+        logger.info(
+            "gmail_push refs_enqueued "
+            f"user={user_id} inserted={enqueue_stats['inserted']} "
+            f"requeued={enqueue_stats['requeued']} skipped={enqueue_stats['skipped']}"
+        )
 
         # Persist latest_history_id (best-effort)
         try:
@@ -205,7 +152,7 @@ async def handle_gmail_push(email_address: str, pushed_history_id: str) -> None:
 
 @router.post("/gmail/push")
 async def gmail_pubsub_push(
-    request: Request, background_tasks: BackgroundTasks
+    request: Request
 ) -> Response:
     """
     Google Pub/Sub push endpoint for Gmail watch notifications.
@@ -228,10 +175,7 @@ async def gmail_pubsub_push(
             f"attempt={delivery_attempt} iss={claims.get('iss')}"
         )
 
-        # Fire background processing
-        background_tasks.add_task(
-            handle_gmail_push, decoded["email_address"], decoded["history_id"]
-        )
+        await handle_gmail_push(decoded["email_address"], decoded["history_id"])
 
         # Always 204 on success so Pub/Sub acks
         return Response(status_code=204)

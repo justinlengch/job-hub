@@ -93,15 +93,31 @@ class EmailParsingService(BaseService):
                         f"email_process force_bypass_dedupe user={user_id} raw_email_id={raw_email_id} email_id={email_id}"
                     )
             else:
-                ref_insert = (
-                    await supabase.table("email_refs").insert(ref_payload).execute()
-                )
-                if not ref_insert.data:
-                    raise ServiceOperationError("Failed to insert email reference")
-                email_id = ref_insert.data[0]["email_id"]
-                self.logger.info(
-                    f"email_process ref_inserted user={user_id} raw_email_id={raw_email_id} email_id={email_id}"
-                )
+                try:
+                    ref_insert = (
+                        await supabase.table("email_refs").insert(ref_payload).execute()
+                    )
+                    if not ref_insert.data:
+                        raise ServiceOperationError("Failed to insert email reference")
+                    email_id = ref_insert.data[0]["email_id"]
+                    self.logger.info(
+                        f"email_process ref_inserted user={user_id} raw_email_id={raw_email_id} email_id={email_id}"
+                    )
+                except Exception:
+                    existing_ref = (
+                        await supabase.table("email_refs")
+                        .select("email_id")
+                        .eq("user_id", user_id)
+                        .eq("external_email_id", raw_email_id)
+                        .limit(1)
+                        .execute()
+                    )
+                    if not existing_ref.data:
+                        raise
+                    email_id = existing_ref.data[0]["email_id"]
+                    self.logger.info(
+                        f"email_process ref_reused_after_conflict user={user_id} raw_email_id={raw_email_id} email_id={email_id}"
+                    )
 
             # For non-job emails, skip creating application/events, keep the ref only
             if parsed.intent == EmailIntent.GENERAL:

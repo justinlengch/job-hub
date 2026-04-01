@@ -51,6 +51,13 @@ CREATE TYPE application_merge_status AS ENUM (
   'MANUALLY_SEPARATED'
 );
 
+CREATE TYPE email_ingest_queue_status AS ENUM (
+  'pending',
+  'processing',
+  'done',
+  'failed'
+);
+
 -- 2. Create Tables
 
 -- Job Applications Table
@@ -144,6 +151,9 @@ CREATE INDEX IF NOT EXISTS application_sources_user_id_idx ON application_source
 CREATE INDEX IF NOT EXISTS application_sources_application_id_idx ON application_sources(application_id);
 CREATE INDEX IF NOT EXISTS application_sources_candidate_application_id_idx ON application_sources(candidate_application_id);
 CREATE INDEX IF NOT EXISTS application_sources_merge_status_idx ON application_sources(merge_status);
+CREATE UNIQUE INDEX IF NOT EXISTS application_sources_email_unique_idx
+ON application_sources(user_id, source_type, external_source_id)
+WHERE source_type = 'EMAIL' AND external_source_id IS NOT NULL;
 
 -- Create email_refs table used by the backend email pipeline
 DROP TABLE IF EXISTS email_refs CASCADE;
@@ -157,11 +167,42 @@ history_id BIGINT,
 received_at TIMESTAMPTZ NOT NULL,
 created_at TIMESTAMPTZ DEFAULT now()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS email_refs_user_external_email_idx
+ON email_refs(user_id, external_email_id);
+
+DROP TABLE IF EXISTS email_ingest_queue CASCADE;
+CREATE TABLE email_ingest_queue (
+queue_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+user_id TEXT NOT NULL,
+external_email_id TEXT NOT NULL,
+thread_id TEXT,
+history_id TEXT,
+status email_ingest_queue_status NOT NULL DEFAULT 'pending',
+attempt_count INTEGER NOT NULL DEFAULT 0,
+next_retry_at TIMESTAMPTZ,
+locked_at TIMESTAMPTZ,
+lock_owner TEXT,
+last_error TEXT,
+received_at TIMESTAMPTZ,
+payload_snapshot JSONB,
+created_at TIMESTAMPTZ DEFAULT now(),
+updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS email_ingest_queue_user_external_email_idx
+ON email_ingest_queue(user_id, external_email_id);
+CREATE INDEX IF NOT EXISTS email_ingest_queue_status_retry_idx
+ON email_ingest_queue(status, next_retry_at);
+CREATE INDEX IF NOT EXISTS email_ingest_queue_locked_at_idx
+ON email_ingest_queue(locked_at);
 
 -- Add index on user_id for all tables
 CREATE INDEX IF NOT EXISTS job_applications_user_id_idx ON job_applications(user_id);
 CREATE INDEX IF NOT EXISTS application_events_user_id_idx ON application_events(user_id);
 CREATE INDEX IF NOT EXISTS emails_user_id_idx ON emails(user_id);
+CREATE INDEX IF NOT EXISTS email_ingest_queue_user_id_idx ON email_ingest_queue(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS application_events_source_id_unique_idx
+ON application_events(source_id)
+WHERE source_id IS NOT NULL;
 
 -- Add index on application_id for related tables
 CREATE INDEX IF NOT EXISTS application_events_application_id_idx ON application_events(application_id);
@@ -214,12 +255,67 @@ AFTER INSERT ON emails
 FOR EACH ROW
 EXECUTE FUNCTION update_job_application_on_email_insert();
 
+CREATE OR REPLACE FUNCTION update_email_ingest_queue_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+NEW.updated_at = now();
+RETURN NEW;
+END;
+$$
+LANGUAGE plpgsql;
+
+CREATE TRIGGER update_email_ingest_queue_timestamp
+BEFORE UPDATE ON email_ingest_queue
+FOR EACH ROW
+EXECUTE FUNCTION update_email_ingest_queue_timestamp();
+
+CREATE OR REPLACE FUNCTION claim_email_ingest_queue_batch(
+  p_worker_id TEXT,
+  p_limit INTEGER,
+  p_lease_seconds INTEGER
+)
+RETURNS SETOF email_ingest_queue
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  WITH candidates AS (
+    SELECT q.queue_id
+    FROM email_ingest_queue q
+    WHERE (
+      q.status = 'pending'
+      OR (q.status = 'failed' AND q.next_retry_at IS NOT NULL AND q.next_retry_at <= now())
+      OR (
+        q.status = 'processing'
+        AND q.locked_at IS NOT NULL
+        AND q.locked_at <= now() - make_interval(secs => p_lease_seconds)
+      )
+    )
+    ORDER BY COALESCE(q.next_retry_at, q.created_at), q.created_at
+    FOR UPDATE SKIP LOCKED
+    LIMIT p_limit
+  ), claimed AS (
+    UPDATE email_ingest_queue q
+    SET
+      status = 'processing',
+      attempt_count = q.attempt_count + 1,
+      locked_at = now(),
+      lock_owner = p_worker_id,
+      next_retry_at = NULL
+    WHERE q.queue_id IN (SELECT queue_id FROM candidates)
+    RETURNING q.*
+  )
+  SELECT * FROM claimed;
+END;
+$$;
+
 -- Update RLS policies for all tables
 ALTER TABLE job_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE application_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE emails ENABLE ROW LEVEL SECURITY;
 ALTER TABLE application_sources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_refs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_ingest_queue ENABLE ROW LEVEL SECURITY;
 
 -- Development policies (remove in production)
 CREATE POLICY "dev_job_applications_policy" ON job_applications FOR ALL USING (true);
@@ -227,4 +323,4 @@ CREATE POLICY "dev_application_events_policy" ON application_events FOR ALL USIN
 CREATE POLICY "dev_emails_policy" ON emails FOR ALL USING (true);
 CREATE POLICY "dev_application_sources_policy" ON application_sources FOR ALL USING (true);
 CREATE POLICY "dev_email_refs_policy" ON email_refs FOR ALL USING (true);
-$$
+CREATE POLICY "dev_email_ingest_queue_policy" ON email_ingest_queue FOR ALL USING (true);

@@ -35,36 +35,37 @@ class GmailService(BaseService):
         Create a Gmail API client using user's OAuth credentials.
         """
         try:
-            creds = Credentials(
-                token=user_credentials.get("access_token"),
-                refresh_token=user_credentials.get("refresh_token"),
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=settings.GOOGLE_CLIENT_ID,
-                client_secret=settings.GOOGLE_CLIENT_SECRET,
-                scopes=[
-                    "https://www.googleapis.com/auth/gmail.readonly",
-                    "https://www.googleapis.com/auth/gmail.labels",
-                    "https://www.googleapis.com/auth/gmail.settings.basic",
-                ],
-            )
-
-            if not creds.valid:
-                if creds.refresh_token:
-                    creds.refresh(Request())
-                else:
-                    self._log_error(
-                        "creating Gmail client",
-                        ValueError("Missing refresh_token; cannot mint access token"),
-                    )
-                    return False
-
-            self.service = build("gmail", "v1", credentials=creds)
+            self.service = self.build_gmail_client(user_credentials)
             self._log_operation("Gmail client created successfully")
             return True
 
         except Exception as e:
             self._log_error("creating Gmail client", e)
             return False
+
+    def build_gmail_client(self, user_credentials: Dict[str, Any]):
+        creds = Credentials(
+            token=user_credentials.get("access_token"),
+            refresh_token=user_credentials.get("refresh_token"),
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=settings.GOOGLE_CLIENT_ID,
+            client_secret=settings.GOOGLE_CLIENT_SECRET,
+            scopes=[
+                "https://www.googleapis.com/auth/gmail.readonly",
+                "https://www.googleapis.com/auth/gmail.labels",
+                "https://www.googleapis.com/auth/gmail.settings.basic",
+            ],
+        )
+
+        if not creds.valid:
+            if creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                raise ServiceOperationError(
+                    "Missing refresh_token; cannot mint access token"
+                )
+
+        return build("gmail", "v1", credentials=creds)
 
     def create_gmail_client_with_service_account(
         self, service_account_file: str

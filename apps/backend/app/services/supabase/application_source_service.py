@@ -34,14 +34,14 @@ from app.services.supabase.supabase_client import supabase_service
 
 SANKY_STAGE_ORDER = [
     "APPLIED",
+    "GHOSTED",
+    "REJECTED",
     "ASSESSMENT",
     "INTERVIEW",
     "FINAL_ROUND",
     "OFFERED",
     "ACCEPTED",
-    "REJECTED",
     "WITHDRAWN",
-    "GHOSTED",
 ]
 
 SANKY_STAGE_KIND = {
@@ -58,14 +58,14 @@ SANKY_STAGE_KIND = {
 
 SANKY_STAGE_COLUMN = {
     "APPLIED": 0,
-    "ASSESSMENT": 1,
-    "INTERVIEW": 2,
-    "FINAL_ROUND": 3,
-    "OFFERED": 4,
-    "ACCEPTED": 5,
-    "REJECTED": 5,
-    "WITHDRAWN": 5,
-    "GHOSTED": 5,
+    "GHOSTED": 1,
+    "REJECTED": 2,
+    "ASSESSMENT": 3,
+    "INTERVIEW": 4,
+    "FINAL_ROUND": 5,
+    "OFFERED": 6,
+    "ACCEPTED": 7,
+    "WITHDRAWN": 7,
 }
 
 SANKY_STAGE_RANK = {
@@ -125,12 +125,69 @@ class ApplicationSourceService(BaseService):
                 return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
             except ValueError:
                 continue
-        for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%b %d, %Y", "%B %d, %Y"):
+        for fmt in (
+            "%m/%d/%y, %I:%M %p",
+            "%m/%d/%Y, %I:%M %p",
+            "%Y-%m-%d",
+            "%m/%d/%Y",
+            "%Y/%m/%d",
+            "%b %d, %Y",
+            "%B %d, %Y",
+        ):
             try:
                 return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
             except ValueError:
                 continue
         return None
+
+    @staticmethod
+    def _extract_relevant_linkedin_payload(
+        row: Dict[str, Any],
+        *,
+        company: str,
+        role: str,
+        applied_at_raw: str,
+        status_text: Optional[str],
+        job_url: Optional[str],
+        location: Optional[str],
+        source_url: Optional[str],
+        external_source_id: Optional[str],
+    ) -> Dict[str, Any]:
+        payload = {
+            "company": company,
+            "role": role,
+            "applied_at": applied_at_raw,
+        }
+        if status_text:
+            payload["status_text"] = status_text
+        if job_url:
+            payload["job_url"] = job_url
+        if location:
+            payload["location"] = location
+        if source_url:
+            payload["source_url"] = source_url
+        if external_source_id:
+            payload["external_source_id"] = external_source_id
+
+        # Preserve recognized LinkedIn export columns that are still job-specific.
+        lowered = {str(k).lower().strip(): v for k, v in row.items()}
+        extra_job_fields = {
+            "application status": "status_text",
+            "status": "status_text",
+            "job location": "location",
+            "location": "location",
+            "easy apply url": "source_url",
+            "application url": "source_url",
+            "source url": "source_url",
+            "application id": "external_source_id",
+            "external source id": "external_source_id",
+            "id": "external_source_id",
+        }
+        for raw_key, normalized_key in extra_job_fields.items():
+            value = ApplicationSourceService._clean_str(lowered.get(raw_key))
+            if value and normalized_key not in payload:
+                payload[normalized_key] = value
+        return payload
 
     @staticmethod
     def _clean_str(value: Any) -> Optional[str]:
@@ -176,17 +233,33 @@ class ApplicationSourceService(BaseService):
         if not applied_at:
             raise ValueError("invalid applied_at value")
 
+        status_text = resolve("status_text")
+        job_url = resolve("job_url")
+        location = resolve("location")
+        source_url = resolve("source_url")
+        external_source_id = resolve("external_source_id")
+
         return {
             "row_number": row_number,
             "company": company,
             "role": role,
             "applied_at": applied_at,
-            "status_text": resolve("status_text"),
-            "job_url": resolve("job_url"),
-            "location": resolve("location"),
-            "source_url": resolve("source_url"),
-            "external_source_id": resolve("external_source_id"),
-            "payload_json": row,
+            "status_text": status_text,
+            "job_url": job_url,
+            "location": location,
+            "source_url": source_url,
+            "external_source_id": external_source_id,
+            "payload_json": self._extract_relevant_linkedin_payload(
+                row,
+                company=company,
+                role=role,
+                applied_at_raw=applied_at_raw,
+                status_text=status_text,
+                job_url=job_url,
+                location=location,
+                source_url=source_url,
+                external_source_id=external_source_id,
+            ),
         }
 
     def parse_upload_rows(
@@ -214,10 +287,24 @@ class ApplicationSourceService(BaseService):
 
     async def _create_source_record(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         supabase = await supabase_service.get_client()
-        response = await supabase.table("application_sources").insert(payload).execute()
-        if not response.data:
-            raise ServiceOperationError("Failed to create application source record")
-        return response.data[0]
+        try:
+            response = await supabase.table("application_sources").insert(payload).execute()
+            if not response.data:
+                raise ServiceOperationError("Failed to create application source record")
+            return response.data[0]
+        except Exception:
+            external_source_id = payload.get("external_source_id")
+            source_type = payload.get("source_type")
+            user_id = payload.get("user_id")
+            if external_source_id and source_type and user_id:
+                existing = await self._fetch_source_by_external_source(
+                    user_id=user_id,
+                    source_type=source_type,
+                    external_source_id=external_source_id,
+                )
+                if existing:
+                    return existing
+            raise
 
     async def _update_source_record(
         self, source_id: str, user_id: str, updates: Dict[str, Any]
@@ -233,6 +320,22 @@ class ApplicationSourceService(BaseService):
         if not response.data:
             raise ServiceOperationError("Failed to update application source record")
         return response.data[0]
+
+    async def _fetch_source_by_external_source(
+        self, *, user_id: str, source_type: str, external_source_id: str
+    ) -> Optional[Dict[str, Any]]:
+        supabase = await supabase_service.get_client()
+        response = (
+            await supabase.table("application_sources")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("source_type", source_type)
+            .eq("external_source_id", external_source_id)
+            .order("created_at", desc=False)
+            .limit(1)
+            .execute()
+        )
+        return response.data[0] if response.data else None
 
     async def _fetch_source(self, source_id: str, user_id: str) -> Dict[str, Any]:
         supabase = await supabase_service.get_client()
@@ -255,6 +358,21 @@ class ApplicationSourceService(BaseService):
             .select("*")
             .eq("application_id", application_id)
             .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def _fetch_event_by_source(
+        self, source_id: str, user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        supabase = await supabase_service.get_client()
+        response = (
+            await supabase.table("application_events")
+            .select("*")
+            .eq("source_id", source_id)
+            .eq("user_id", user_id)
+            .order("created_at", desc=False)
             .limit(1)
             .execute()
         )
@@ -325,6 +443,21 @@ class ApplicationSourceService(BaseService):
             raise ServiceOperationError("Failed to update job application")
         return response.data[0]
 
+    async def _update_event(
+        self, event_id: str, user_id: str, updates: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        supabase = await supabase_service.get_client()
+        response = (
+            await supabase.table("application_events")
+            .update(updates)
+            .eq("event_id", event_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        if not response.data:
+            raise ServiceOperationError("Failed to update application event")
+        return response.data[0]
+
     async def _create_event(
         self,
         *,
@@ -352,10 +485,18 @@ class ApplicationSourceService(BaseService):
             "is_inferred": is_inferred,
             "confidence_score": confidence_score,
         }
-        response = await supabase.table("application_events").insert(payload).execute()
-        if not response.data:
-            raise ServiceOperationError("Failed to create application event")
-        return response.data[0]
+        try:
+            response = await supabase.table("application_events").insert(payload).execute()
+            if not response.data:
+                raise ServiceOperationError("Failed to create application event")
+            return response.data[0]
+            # Unique source_id violations should return the existing derived event.
+        except Exception:
+            if source_id:
+                existing = await self._fetch_event_by_source(source_id, user_id)
+                if existing:
+                    return existing
+            raise
 
     async def _find_existing_final_round(
         self, application_id: str, user_id: str
@@ -427,6 +568,108 @@ class ApplicationSourceService(BaseService):
         received_at: Optional[datetime],
     ) -> Dict[str, Any]:
         observed_at = parsed.event_date or received_at or self._utc_now()
+        existing_source = await self._fetch_source_by_external_source(
+            user_id=user_id,
+            source_type=ApplicationSourceType.EMAIL.value,
+            external_source_id=email_id,
+        )
+
+        if existing_source:
+            payload = await self._build_source_payload_from_email(
+                user_id=user_id,
+                parsed=parsed,
+                email_id=email_id,
+                sender=sender,
+                subject=subject,
+                received_at=received_at,
+                merge_status=ApplicationMergeStatus(
+                    existing_source.get("merge_status")
+                    or ApplicationMergeStatus.UNMATCHED.value
+                ),
+                merge_confidence=existing_source.get("merge_confidence"),
+                candidate_application_id=existing_source.get("candidate_application_id"),
+                review_reason=existing_source.get("review_reason"),
+                application_id=existing_source.get("application_id"),
+            )
+
+            source = await self._update_source_record(
+                existing_source["source_id"],
+                user_id,
+                payload,
+            )
+
+            application_id = existing_source.get("application_id")
+            if application_id:
+                inferred = parsed.intent == EmailIntent.APPLICATION_EVENT and (
+                    parsed.status != ApplicationStatus.APPLIED
+                    or (
+                        parsed.event_type
+                        and parsed.event_type
+                        != ApplicationEventType.APPLICATION_SUBMITTED
+                    )
+                )
+                application = await self._update_application(
+                    application_id,
+                    user_id,
+                    {
+                        "company": parsed.company,
+                        "role": parsed.role,
+                        "status": parsed.status.value,
+                        "location": parsed.location,
+                        "salary_range": parsed.salary_range,
+                        "notes": parsed.notes,
+                        "application_origin": ApplicationOrigin.EMAIL.value,
+                        "match_confidence": existing_source.get("merge_confidence"),
+                        "application_inferred": inferred,
+                        "inferred_reason": "FIRST_SIGNAL_WAS_LATER_STAGE"
+                        if inferred
+                        else None,
+                        "last_email_received_at": observed_at.isoformat(),
+                    },
+                )
+                event_type = parsed.event_type
+                if parsed.intent == EmailIntent.NEW_APPLICATION and not event_type:
+                    event_type = ApplicationEventType.APPLICATION_SUBMITTED
+                elif not event_type:
+                    event_type = application_matcher_service.event_type_from_status(
+                        parsed.status
+                    )
+
+                existing_event = await self._fetch_event_by_source(
+                    source["source_id"], user_id
+                )
+                event_updates = {
+                    "application_id": application_id,
+                    "event_type": event_type.value
+                    if isinstance(event_type, ApplicationEventType)
+                    else event_type,
+                    "event_date": observed_at.isoformat(),
+                    "description": parsed.event_description or subject,
+                    "email_id": email_id,
+                    "source_type": ApplicationSourceType.EMAIL.value,
+                    "source_id": source["source_id"],
+                    "confidence_score": existing_source.get("merge_confidence"),
+                }
+                if existing_event:
+                    event = await self._update_event(
+                        existing_event["event_id"], user_id, event_updates
+                    )
+                else:
+                    event = await self._create_event(
+                        application_id=application_id,
+                        user_id=user_id,
+                        event_type=event_type,
+                        event_date=observed_at,
+                        description=parsed.event_description or subject,
+                        source_type=ApplicationSourceType.EMAIL.value,
+                        source_id=source["source_id"],
+                        email_id=email_id,
+                        confidence_score=existing_source.get("merge_confidence"),
+                    )
+                return {"application": application, "event": event, "source": source}
+
+            return {"source": source, "pending_review": True}
+
         best_match = await application_matcher_service.find_best_application_match(
             user_id=user_id,
             company=parsed.company,
@@ -496,6 +739,63 @@ class ApplicationSourceService(BaseService):
                 )
             )
             return {"source": source, "pending_review": True}
+
+        existing_application = await application_matcher_service.find_existing_application_exact(
+            user_id=user_id,
+            company=parsed.company,
+            role=parsed.role,
+            location=parsed.location,
+        )
+        if existing_application and existing_application.get("application_id"):
+            source = await self._create_source_record(
+                await self._build_source_payload_from_email(
+                    user_id=user_id,
+                    parsed=parsed,
+                    email_id=email_id,
+                    sender=sender,
+                    subject=subject,
+                    received_at=received_at,
+                    merge_status=ApplicationMergeStatus.AUTO_MERGED,
+                    merge_confidence=1.0,
+                    candidate_application_id=existing_application["application_id"],
+                    review_reason="exact company and role match",
+                    application_id=existing_application["application_id"],
+                )
+            )
+            application = await self._update_application(
+                existing_application["application_id"],
+                user_id,
+                {
+                    "status": parsed.status.value,
+                    "location": parsed.location,
+                    "salary_range": parsed.salary_range,
+                    "notes": parsed.notes,
+                    "canonical_source": "MERGED",
+                    "application_origin": ApplicationOrigin.EMAIL.value,
+                    "match_confidence": 1.0,
+                    "needs_review": False,
+                    "last_email_received_at": observed_at.isoformat(),
+                },
+            )
+            event_type = parsed.event_type
+            if parsed.intent == EmailIntent.NEW_APPLICATION and not event_type:
+                event_type = ApplicationEventType.APPLICATION_SUBMITTED
+            elif not event_type:
+                event_type = application_matcher_service.event_type_from_status(
+                    parsed.status
+                )
+            event = await self._create_event(
+                application_id=existing_application["application_id"],
+                user_id=user_id,
+                event_type=event_type,
+                event_date=observed_at,
+                description=parsed.event_description or subject,
+                source_type=ApplicationSourceType.EMAIL.value,
+                source_id=source["source_id"],
+                email_id=email_id,
+                confidence_score=1.0,
+            )
+            return {"application": application, "event": event, "source": source}
 
         inferred = parsed.intent == EmailIntent.APPLICATION_EVENT and (
             parsed.status != ApplicationStatus.APPLIED
