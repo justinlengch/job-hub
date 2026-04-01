@@ -14,8 +14,19 @@ const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const getAccessToken = async () => {
   const {
-    data: { session },
+    data: { session: initialSession },
   } = await supabase.auth.getSession();
+
+  let session = initialSession;
+  const expiresAt = session?.expires_at ? session.expires_at * 1000 : null;
+  const isExpiringSoon = expiresAt ? expiresAt <= Date.now() + 60_000 : false;
+
+  if (!session?.access_token || isExpiringSoon) {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (!error) {
+      session = data.session;
+    }
+  }
 
   if (!session?.access_token) {
     throw new Error("No authentication token available");

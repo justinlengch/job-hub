@@ -22,12 +22,17 @@ app = FastAPI(
     version="0.1.0",
 )
 
+cors_allow_origins = [
+    origin.strip()
+    for origin in (settings.CORS_ALLOW_ORIGINS or "").split(",")
+    if origin.strip()
+]
+if settings.FRONTEND_BASE_URL and settings.FRONTEND_BASE_URL not in cors_allow_origins:
+    cors_allow_origins.append(settings.FRONTEND_BASE_URL)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080",
-        "https://job-hub-web.vercel.app",
-    ],
+    allow_origins=cors_allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

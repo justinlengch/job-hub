@@ -13,6 +13,10 @@ class Settings:
     CRYPTO_KEY_B64: str = os.getenv("CRYPTO_KEY_B64")
     GMAIL_KEY_VERSION: int = int(os.getenv("GMAIL_KEY_VERSION", "1"))
     FRONTEND_BASE_URL: str = os.getenv("FRONTEND_BASE_URL")
+    CORS_ALLOW_ORIGINS: str = os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "http://localhost:8080,https://job-hub-web.vercel.app",
+    )
 
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET")
