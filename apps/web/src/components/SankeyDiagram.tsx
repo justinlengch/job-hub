@@ -1065,22 +1065,6 @@ const SankeyDiagram = ({ userId, onStageSelect }: SankeyDiagramProps) => {
                       >
                         {formatCountLabel(node.count)}
                       </text>
-                      {(isRejected || isGhosted) && (
-                        <text
-                          x={labelX}
-                          y={node.y0 + (node.labelLines.length > 1 ? 62 : 48)}
-                          textAnchor={anchor}
-                          style={{
-                            fill: node.palette.muted,
-                            fontSize: "10px",
-                            fontWeight: 600,
-                            letterSpacing: "0.08em",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          End state
-                        </text>
-                      )}
                     </g>
                   );
                 })}

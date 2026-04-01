@@ -1,5 +1,7 @@
 build:
   docker:
     web: apps/backend/Dockerfile
+    worker: apps/backend/Dockerfile
 run:
   web: /docker-entrypoint.sh
+  worker: /bin/sh -lc "cd /app && python -m app.tasks.email_ingest_worker"
