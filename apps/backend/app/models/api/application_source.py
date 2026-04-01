@@ -85,19 +85,44 @@ class ReviewActionResponse(BaseModel):
     merge_status: ApplicationMergeStatus
 
 
+class SankeyNodeKind(str, Enum):
+    ROOT = "root"
+    PROGRESS = "progress"
+    TERMINAL = "terminal"
+    GHOSTED = "ghosted"
+
+
+class SankeyLinkKind(str, Enum):
+    ROOT = "root"
+    PROGRESS = "progress"
+    TERMINAL = "terminal"
+    GHOSTED = "ghosted"
+
+
 class SankeyNode(BaseModel):
     id: str
     label: str
     count: int
+    kind: SankeyNodeKind
+    column: int
 
 
 class SankeyLink(BaseModel):
     source: str
     target: str
     value: int
+    kind: SankeyLinkKind
+    application_ids: Optional[List[str]] = None
+
+
+class SankeyMeta(BaseModel):
+    total_applications: int
+    ghosted_count: int
+    inferred_count: int
+    pending_review_count: int
 
 
 class SankeyResponse(BaseModel):
     nodes: List[SankeyNode]
     links: List[SankeyLink]
-    meta: Dict[str, Any]
+    meta: SankeyMeta

@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from app.core.auth import get_current_user
+from app.models.api.application_source import SankeyResponse
 from app.services.base_service import ServiceOperationError
 from app.services.supabase.application_source_service import application_source_service
 
@@ -62,7 +63,7 @@ async def separate_review_queue_item(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/analytics/sankey")
+@router.get("/analytics/sankey", response_model=SankeyResponse)
 async def get_sankey_data(
     start_date: Optional[str] = Query(default=None),
     end_date: Optional[str] = Query(default=None),
@@ -78,6 +79,14 @@ async def get_sankey_data(
             source_type=source_type,
             company=company,
         )
+    except ServiceOperationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/analytics/sankey/generate", response_model=SankeyResponse)
+async def generate_sankey_data(current_user_id: str = Depends(get_current_user)):
+    try:
+        return await application_source_service.generate_sankey_data(current_user_id)
     except ServiceOperationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

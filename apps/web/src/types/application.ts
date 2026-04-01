@@ -174,12 +174,15 @@ export interface SankeyNode {
   label: string;
   count: number;
   stage?: string;
+  kind?: string;
+  column?: number;
 }
 
 export interface SankeyLink {
   source: string;
   target: string;
   value: number;
+  kind?: string;
   application_ids?: string[];
   label?: string;
 }
@@ -188,12 +191,19 @@ export interface SankeyMeta {
   total_applications: number;
   inferred_count?: number;
   pending_review_count?: number;
+  ghosted_count?: number;
 }
 
 export interface SankeyResponse {
   nodes: SankeyNode[];
   links: SankeyLink[];
   meta?: SankeyMeta;
+}
+
+export interface SankeySnapshotCache {
+  generated_at: string;
+  schema_version: number;
+  payload: SankeyResponse;
 }
 
 export interface LinkedInImportSummary {

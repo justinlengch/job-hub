@@ -124,6 +124,12 @@ export const apiService = {
     );
   },
 
+  async generateSankeyData(): Promise<SankeyResponse> {
+    return requestJson<SankeyResponse>("/api/analytics/sankey/generate", {
+      method: "POST",
+    });
+  },
+
   async toggleFinalRound(
     applicationId: string,
     enabled: boolean

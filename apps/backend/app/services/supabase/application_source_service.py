@@ -9,6 +9,12 @@ from app.models.api.application_event import ApplicationEventType
 from app.models.api.application_source import (
     ApplicationMergeStatus,
     ApplicationSourceType,
+    SankeyLink,
+    SankeyLinkKind,
+    SankeyMeta,
+    SankeyNode,
+    SankeyNodeKind,
+    SankeyResponse,
 )
 from app.models.api.job_application import (
     ApplicationDatePrecision,
@@ -26,7 +32,7 @@ from app.services.supabase.application_matcher_service import (
 from app.services.supabase.supabase_client import supabase_service
 
 
-STAGE_ORDER = [
+SANKY_STAGE_ORDER = [
     "APPLIED",
     "ASSESSMENT",
     "INTERVIEW",
@@ -35,7 +41,44 @@ STAGE_ORDER = [
     "ACCEPTED",
     "REJECTED",
     "WITHDRAWN",
+    "GHOSTED",
 ]
+
+SANKY_STAGE_KIND = {
+    "APPLIED": SankeyNodeKind.ROOT,
+    "ASSESSMENT": SankeyNodeKind.PROGRESS,
+    "INTERVIEW": SankeyNodeKind.PROGRESS,
+    "FINAL_ROUND": SankeyNodeKind.PROGRESS,
+    "OFFERED": SankeyNodeKind.PROGRESS,
+    "ACCEPTED": SankeyNodeKind.TERMINAL,
+    "REJECTED": SankeyNodeKind.TERMINAL,
+    "WITHDRAWN": SankeyNodeKind.TERMINAL,
+    "GHOSTED": SankeyNodeKind.GHOSTED,
+}
+
+SANKY_STAGE_COLUMN = {
+    "APPLIED": 0,
+    "ASSESSMENT": 1,
+    "INTERVIEW": 2,
+    "FINAL_ROUND": 3,
+    "OFFERED": 4,
+    "ACCEPTED": 5,
+    "REJECTED": 5,
+    "WITHDRAWN": 5,
+    "GHOSTED": 5,
+}
+
+SANKY_STAGE_RANK = {
+    "APPLIED": 0,
+    "ASSESSMENT": 1,
+    "INTERVIEW": 2,
+    "FINAL_ROUND": 3,
+    "OFFERED": 4,
+    "ACCEPTED": 5,
+    "REJECTED": 5,
+    "WITHDRAWN": 5,
+    "GHOSTED": 6,
+}
 
 
 class ApplicationSourceService(BaseService):
@@ -975,8 +1018,8 @@ class ApplicationSourceService(BaseService):
             ApplicationEventType.ASSESSMENT_COMPLETED.value: "ASSESSMENT",
             ApplicationEventType.INTERVIEW_SCHEDULED.value: "INTERVIEW",
             ApplicationEventType.INTERVIEW_COMPLETED.value: "INTERVIEW",
-            ApplicationEventType.FINAL_ROUND.value: "FINAL_ROUND",
             ApplicationEventType.REFERENCE_REQUESTED.value: "INTERVIEW",
+            ApplicationEventType.FINAL_ROUND.value: "FINAL_ROUND",
             ApplicationEventType.OFFER_RECEIVED.value: "OFFERED",
             ApplicationEventType.OFFER_ACCEPTED.value: "ACCEPTED",
             ApplicationEventType.OFFER_DECLINED.value: "WITHDRAWN",
@@ -998,35 +1041,217 @@ class ApplicationSourceService(BaseService):
         }
         return mapping.get(status, "APPLIED")
 
-    def _build_stage_path(
-        self, application: Dict[str, Any], events: List[Dict[str, Any]]
+    @staticmethod
+    def _is_terminal_stage(stage: str) -> bool:
+        return stage in {"ACCEPTED", "REJECTED", "WITHDRAWN"}
+
+    @staticmethod
+    def _stage_rank(stage: str) -> int:
+        return SANKY_STAGE_RANK.get(stage, 0)
+
+    @staticmethod
+    def _stage_kind(stage: str) -> SankeyNodeKind:
+        return SANKY_STAGE_KIND.get(stage, SankeyNodeKind.PROGRESS)
+
+    @staticmethod
+    def _stage_column(stage: str) -> int:
+        return SANKY_STAGE_COLUMN.get(stage, 5)
+
+    def _is_ghosted_application(
+        self,
+        application: Dict[str, Any],
+        events: List[Dict[str, Any]],
+    ) -> bool:
+        if application.get("application_inferred"):
+            return False
+
+        if self._stage_from_status(application.get("status") or "APPLIED") != "APPLIED":
+            return False
+
+        has_downstream_signal = any(
+            self._stage_from_event(event.get("event_type"))
+            in {"ASSESSMENT", "INTERVIEW", "FINAL_ROUND", "OFFERED", "ACCEPTED", "REJECTED", "WITHDRAWN"}
+            for event in events
+        )
+        return not has_downstream_signal
+
+    def _build_application_path(
+        self,
+        application: Dict[str, Any],
+        events: List[Dict[str, Any]],
     ) -> List[str]:
-        stages: List[str] = []
-        sorted_events = sorted(
+        path: List[str] = ["APPLIED"]
+        ordered_events = sorted(
             events,
             key=lambda event: self._parse_datetime(event.get("event_date")) or self._utc_now(),
         )
-        for event in sorted_events:
+        last_rank = self._stage_rank("APPLIED")
+        last_stage = "APPLIED"
+
+        for event in ordered_events:
             stage = self._stage_from_event(event.get("event_type"))
-            if stage and (not stages or stages[-1] != stage):
-                stages.append(stage)
+            if not stage or stage == "APPLIED":
+                continue
+            stage_rank = self._stage_rank(stage)
+            if stage_rank < last_rank:
+                continue
+            if stage == last_stage:
+                continue
+            path.append(stage)
+            last_stage = stage
+            last_rank = stage_rank
+            if self._is_terminal_stage(stage):
+                break
 
-        terminal_stage = self._stage_from_status(application.get("status") or ApplicationStatus.APPLIED.value)
-        if application.get("application_inferred") and (not stages or stages[0] != "APPLIED"):
-            stages.insert(0, "APPLIED")
-        elif application.get("applied_date") and not stages:
-            stages.append("APPLIED")
-
-        if not stages:
-            stages.append(terminal_stage)
-        elif stages[-1] != terminal_stage:
-            stages.append(terminal_stage)
+        if len(path) == 1:
+            if self._is_ghosted_application(application, ordered_events):
+                path.append("GHOSTED")
+            else:
+                status_stage = self._stage_from_status(application.get("status") or "APPLIED")
+                if status_stage != "APPLIED":
+                    path.append(status_stage)
+        else:
+            if not self._is_terminal_stage(path[-1]):
+                status_stage = self._stage_from_status(application.get("status") or "APPLIED")
+                if self._is_terminal_stage(status_stage) and status_stage not in path:
+                    path.append(status_stage)
 
         deduped: List[str] = []
-        for stage in stages:
+        for stage in path:
             if not deduped or deduped[-1] != stage:
                 deduped.append(stage)
         return deduped
+
+    def build_sankey_graph(
+        self,
+        applications: List[Dict[str, Any]],
+        events: List[Dict[str, Any]],
+        *,
+        pending_review_count: int = 0,
+    ) -> SankeyResponse:
+        grouped_events: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for event in events:
+            application_id = event.get("application_id")
+            if application_id:
+                grouped_events[application_id].append(event)
+
+        node_counts: Dict[str, int] = defaultdict(int)
+        link_counts: Dict[tuple[str, str], int] = defaultdict(int)
+        link_app_ids: Dict[tuple[str, str], List[str]] = defaultdict(list)
+        ghosted_count = 0
+        inferred_count = 0
+        total_applications = 0
+
+        for application in applications:
+            application_id = application.get("application_id")
+            if not application_id:
+                continue
+
+            total_applications += 1
+            if application.get("application_inferred"):
+                inferred_count += 1
+
+            app_events = grouped_events.get(application_id, [])
+            path = self._build_application_path(application, app_events)
+            if "GHOSTED" in path:
+                ghosted_count += 1
+
+            for stage in path:
+                node_counts[stage] += 1
+            for source_stage, target_stage in zip(path, path[1:]):
+                key = (source_stage, target_stage)
+                link_counts[key] += 1
+                link_app_ids[key].append(application_id)
+
+        nodes = [
+            SankeyNode(
+                id=stage,
+                label=stage.replace("_", " ").title(),
+                count=node_counts.get(stage, 0),
+                kind=self._stage_kind(stage),
+                column=self._stage_column(stage),
+            )
+            for stage in SANKY_STAGE_ORDER
+            if node_counts.get(stage, 0) > 0
+        ]
+        nodes.sort(key=lambda node: (node.column, node.kind.value, node.id))
+
+        links = [
+            SankeyLink(
+                source=source_stage,
+                target=target_stage,
+                value=count,
+                kind=SankeyLinkKind(self._stage_kind(target_stage).value),
+                application_ids=link_app_ids[(source_stage, target_stage)],
+            )
+            for (source_stage, target_stage), count in sorted(link_counts.items())
+            if count > 0
+        ]
+
+        return SankeyResponse(
+            nodes=nodes,
+            links=links,
+            meta=SankeyMeta(
+                total_applications=total_applications,
+                ghosted_count=ghosted_count,
+                inferred_count=inferred_count,
+                pending_review_count=pending_review_count,
+            ),
+        )
+
+    async def generate_sankey_data(
+        self,
+        user_id: str,
+        *,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        source_type: Optional[str] = None,
+        company: Optional[str] = None,
+    ) -> SankeyResponse:
+        supabase = await supabase_service.get_client()
+        query = supabase.table("job_applications").select("*").eq("user_id", user_id)
+        if company:
+            query = query.ilike("company", f"%{company}%")
+        if source_type:
+            query = query.eq("canonical_source", source_type)
+        app_resp = await query.execute()
+        applications = app_resp.data or []
+
+        application_ids = [row["application_id"] for row in applications if row.get("application_id")]
+        events: List[Dict[str, Any]] = []
+        if application_ids:
+            event_query = (
+                supabase.table("application_events")
+                .select("*")
+                .eq("user_id", user_id)
+                .in_("application_id", application_ids)
+            )
+            event_resp = await event_query.execute()
+            events = event_resp.data or []
+
+        start_dt = self._parse_datetime(start_date)
+        end_dt = self._parse_datetime(end_date)
+        if start_dt or end_dt:
+            filtered_apps = []
+            for application in applications:
+                applied_at = self._parse_datetime(application.get("applied_date"))
+                if applied_at:
+                    if start_dt and applied_at < start_dt:
+                        continue
+                    if end_dt and applied_at > end_dt:
+                        continue
+                filtered_apps.append(application)
+            applications = filtered_apps
+            allowed_ids = {row["application_id"] for row in applications if row.get("application_id")}
+            events = [event for event in events if event.get("application_id") in allowed_ids]
+
+        review_queue = await self.get_review_queue(user_id)
+        graph = self.build_sankey_graph(
+            applications,
+            events,
+            pending_review_count=review_queue["pending_count"],
+        )
+        return graph
 
     async def get_sankey_data(
         self,
@@ -1036,97 +1261,14 @@ class ApplicationSourceService(BaseService):
         end_date: Optional[str] = None,
         source_type: Optional[str] = None,
         company: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        supabase = await supabase_service.get_client()
-        query = (
-            supabase.table("job_applications")
-            .select("*")
-            .eq("user_id", user_id)
+    ) -> SankeyResponse:
+        return await self.generate_sankey_data(
+            user_id,
+            start_date=start_date,
+            end_date=end_date,
+            source_type=source_type,
+            company=company,
         )
-        if company:
-            query = query.ilike("company", f"%{company}%")
-        if source_type:
-            query = query.eq("canonical_source", source_type)
-        app_resp = await query.execute()
-        applications = app_resp.data or []
-        if not applications:
-            return {
-                "nodes": [],
-                "links": [],
-                "meta": {"total_applications": 0, "inferred_count": 0, "pending_review_count": 0},
-            }
-
-        application_ids = [row["application_id"] for row in applications]
-        event_query = (
-            supabase.table("application_events")
-            .select("*")
-            .eq("user_id", user_id)
-            .in_("application_id", application_ids)
-        )
-        event_resp = await event_query.execute()
-        events = event_resp.data or []
-
-        start_dt = self._parse_datetime(start_date)
-        end_dt = self._parse_datetime(end_date)
-        if start_dt or end_dt:
-            filtered_apps = []
-            for application in applications:
-                applied_at = self._parse_datetime(application.get("applied_date"))
-                if start_dt and applied_at and applied_at < start_dt:
-                    continue
-                if end_dt and applied_at and applied_at > end_dt:
-                    continue
-                filtered_apps.append(application)
-            applications = filtered_apps
-            application_ids = [row["application_id"] for row in applications]
-            events = [event for event in events if event.get("application_id") in application_ids]
-
-        grouped_events: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-        for event in events:
-            grouped_events[event["application_id"]].append(event)
-
-        node_counts: Counter[str] = Counter()
-        link_counts: Counter[tuple[str, str]] = Counter()
-        link_app_ids: Dict[tuple[str, str], List[str]] = defaultdict(list)
-        inferred_count = 0
-        for application in applications:
-            if application.get("application_inferred"):
-                inferred_count += 1
-            path = self._build_stage_path(
-                application, grouped_events.get(application["application_id"], [])
-            )
-            for stage in set(path):
-                node_counts[stage] += 1
-            for source_stage, target_stage in zip(path, path[1:]):
-                key = (source_stage, target_stage)
-                link_counts[key] += 1
-                link_app_ids[key].append(application["application_id"])
-
-        review_queue = await self.get_review_queue(user_id)
-        nodes = [
-            {"id": stage, "label": stage.replace("_", " ").title(), "count": node_counts.get(stage, 0), "stage": stage}
-            for stage in STAGE_ORDER
-            if node_counts.get(stage, 0) > 0
-        ]
-        links = [
-            {
-                "source": key[0],
-                "target": key[1],
-                "value": count,
-                "application_ids": link_app_ids[key],
-                "label": f"{key[0]} -> {key[1]}",
-            }
-            for key, count in link_counts.items()
-        ]
-        return {
-            "nodes": nodes,
-            "links": links,
-            "meta": {
-                "total_applications": len(applications),
-                "inferred_count": inferred_count,
-                "pending_review_count": review_queue["pending_count"],
-            },
-        }
 
 
 application_source_service = ApplicationSourceService()

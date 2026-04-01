@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApplications } from "@/hooks/useApplications";
 import { useApplicationEvents } from "@/hooks/useApplicationEvents";
+import { useAuth } from "@/hooks/useAuth";
 import { JobApplication, StatusCounts } from "@/types/application";
 import StatusCard from "@/components/StatusCard";
 import SankeyDiagram from "@/components/SankeyDiagram";
@@ -13,6 +14,13 @@ import { GmailSetupButton } from "@/components/GmailSetupButton";
 import { useGmailAutomation } from "@/hooks/useGmailAutomation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import {
   FileText,
   Clock,
   CheckCircle,
@@ -23,6 +31,7 @@ import {
 } from "lucide-react";
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const [selectedStatus, setSelectedStatus] = useState<
     JobApplication["status"] | "all" | "in-progress"
   >("all");
@@ -106,6 +115,7 @@ const Dashboard = () => {
     statusCounts.OFFERED +
     statusCounts.ACCEPTED +
     statusCounts.WITHDRAWN;
+  const sankeyUserId = user?.id || applications[0]?.user_id || "anonymous";
 
   // Filter timeline events based on selected status
   const filteredEvents =
@@ -195,13 +205,34 @@ const Dashboard = () => {
         </div>
 
         <div className="grid gap-6 mb-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,0.9fr)]">
-          <SankeyDiagram onStageSelect={handleStageSelect} />
+          <Card className="overflow-hidden border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 pb-4">
+              <CardTitle className="flex items-center justify-between gap-4 text-lg">
+                <span>Analytics</span>
+                <span className="text-sm font-normal text-muted-foreground">
+                  Slide 1: status charts. Slide 2: Sankey snapshot.
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-6 py-6">
+              <Carousel opts={{ align: "start" }} className="px-12">
+                <CarouselContent>
+                  <CarouselItem>
+                    <StatsChart statusCounts={statusCounts} />
+                  </CarouselItem>
+                  <CarouselItem>
+                    <SankeyDiagram
+                      userId={sankeyUserId}
+                      onStageSelect={handleStageSelect}
+                    />
+                  </CarouselItem>
+                </CarouselContent>
+                <CarouselPrevious className="left-0 top-6 -translate-y-0" />
+                <CarouselNext className="right-0 top-6 -translate-y-0" />
+              </Carousel>
+            </CardContent>
+          </Card>
           <ReviewQueuePanel compact />
-        </div>
-
-        {/* Charts */}
-        <div className="mb-8 pt-2">
-          <StatsChart statusCounts={statusCounts} />
         </div>
 
         {/* Gmail Integration Section (only show if not enabled) */}
